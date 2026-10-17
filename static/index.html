@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ModDB — CurseForge & Modrinth</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">M</span>
+      <div>
+        <strong>ModDB</strong>
+        <small>CurseForge + Modrinth</small>
+      </div>
+    </div>
+    <nav>
+      <button class="nav-btn active" data-view="search">Search</button>
+      <button class="nav-btn" data-view="library">Library</button>
+      <button class="nav-btn" data-view="favorites">Saved</button>
+      <button class="nav-btn" data-view="settings">Settings</button>
+    </nav>
+    <section class="filters">
+      <label>Source
+        <select id="source">
+          <option value="all">Both sites</option>
+          <option value="modrinth">Modrinth</option>
+          <option value="curseforge">CurseForge</option>
+          <option value="local">Local cache</option>
+        </select>
+      </label>
+      <label>Type
+        <select id="type">
+          <option value="mod">Mods</option>
+          <option value="modpack">Modpacks</option>
+          <option value="resourcepack">Resource packs</option>
+          <option value="shader">Shaders</option>
+        </select>
+      </label>
+      <label>Loader
+        <select id="loader">
+          <option value="">Any loader</option>
+          <option value="fabric">Fabric</option>
+          <option value="forge">Forge</option>
+          <option value="neoforge">NeoForge</option>
+          <option value="quilt">Quilt</option>
+        </select>
+      </label>
+      <label>Minecraft
+        <input id="version" list="version-list" placeholder="e.g. 1.21.1" />
+        <datalist id="version-list"></datalist>
+      </label>
+      <label>Loader version
+        <input id="loader-version" list="loader-version-list" placeholder="e.g. 0.16.14" />
+        <datalist id="loader-version-list"></datalist>
+      </label>
+      <label>Sort
+        <select id="sort">
+          <option value="relevance">Relevance</option>
+          <option value="downloads">Downloads</option>
+          <option value="updated">Recently updated</option>
+          <option value="newest">Newest</option>
+          <option value="follows">Follows</option>
+          <option value="name">Name</option>
+        </select>
+      </label>
+    </section>
+    <div class="sidebar-stats" id="stats"></div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <form id="search-form">
+        <input id="query" type="search" placeholder="Search a mod by name, author, or slug" autocomplete="off" autofocus />
+        <button type="submit">Search</button>
+      </form>
+    </header>
+    <p class="meta" id="meta"></p>
+    <div class="warnings" id="warnings"></div>
+    <section class="grid" id="results"></section>
+    <button class="more" id="more" hidden>Load more</button>
+    <section class="pack-dock" id="pack-dock" hidden>
+      <div>
+        <strong id="pack-count">0 mods</strong>
+        <span id="pack-target"></span>
+      </div>
+      <div class="pack-actions">
+        <button type="button" id="pack-check">Check compatibility</button>
+        <button type="button" id="pack-download">Download</button>
+        <button type="button" class="ghost" id="pack-clear">Clear</button>
+      </div>
+    </section>
+    <section class="pack-panel" id="pack-panel" hidden>
+      <h2>Selected pack</h2>
+      <div id="pack-issues"></div>
+      <div id="pack-files"></div>
+    </section>
+    <section class="panel" id="settings-panel" hidden>
+      <h2>Settings</h2>
+      <p>Modrinth is public. CurseForge needs an API key from <a href="https://console.curseforge.com/" target="_blank" rel="noreferrer">console.curseforge.com</a>.</p>
+      <form id="key-form">
+        <label>CurseForge API key
+          <input id="api-key" type="password" placeholder="Paste your CurseForge API key" />
+        </label>
+        <button type="submit">Save key</button>
+      </form>
+      <p class="hint" id="key-status"></p>
+    </section>
+  </main>
+
+  <aside class="drawer" id="drawer" hidden>
+    <button class="close" id="close-drawer" aria-label="Close">×</button>
+    <div id="drawer-body"></div>
+  </aside>
+  <div class="backdrop" id="backdrop" hidden></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

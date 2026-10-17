@@ -1,0 +1,9 @@
+data/
+__pycache__/
+.venv/
+.env
+*.pyc
+.idea/
+target/
+dist/
+macos/macos.zip

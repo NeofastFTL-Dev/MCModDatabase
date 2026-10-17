@@ -1,0 +1,12 @@
+pub mod api;
+pub mod cache;
+pub mod catalog;
+pub mod compat;
+pub mod github;
+pub mod gui;
+pub mod index;
+pub mod net;
+pub mod rich;
+pub mod prompt;
+pub mod settings;
+pub mod util;
