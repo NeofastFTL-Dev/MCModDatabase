@@ -9,4 +9,5 @@ pub mod net;
 pub mod rich;
 pub mod prompt;
 pub mod settings;
+pub mod update;
 pub mod util;

@@ -7,6 +7,7 @@ const DEFAULT_CURSEFORGE_KEY: &str =
 pub struct Settings {
     pub download_dir: PathBuf,
     pub curseforge_key: String,
+    pub skip_update: String,
 }
 
 impl Default for Settings {
@@ -14,6 +15,7 @@ impl Default for Settings {
         Settings {
             download_dir: crate::util::default_download_dir(),
             curseforge_key: DEFAULT_CURSEFORGE_KEY.to_string(),
+            skip_update: String::new(),
         }
     }
 }
@@ -35,6 +37,7 @@ impl Settings {
                         "curseforge_key" if !v.trim().is_empty() => {
                             s.curseforge_key = v.trim().to_string()
                         }
+                        "skip_update" => s.skip_update = v.trim().to_string(),
                         _ => {}
                     }
                 }
@@ -45,9 +48,10 @@ impl Settings {
 
     pub fn save(&self) {
         let text = format!(
-            "download_dir={}\ncurseforge_key={}\n",
+            "download_dir={}\ncurseforge_key={}\nskip_update={}\n",
             self.download_dir.display(),
-            self.curseforge_key
+            self.curseforge_key,
+            self.skip_update
         );
         let _ = std::fs::write(path(), text);
     }

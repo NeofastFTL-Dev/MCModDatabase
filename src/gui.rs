@@ -6,6 +6,7 @@ use crate::github;
 use crate::index;
 use crate::prompt;
 use crate::settings::Settings;
+use crate::update::{self, Release};
 use crate::util::{self, fmt_count};
 use eframe::egui::{self, Color32, RichText, Rounding, Stroke};
 use egui_extras::{Column, TableBuilder};
@@ -21,6 +22,8 @@ const DIM: Color32 = Color32::from_rgb(141, 151, 168);
 const BG: Color32 = Color32::from_rgb(8, 9, 12);
 const WARN: Color32 = Color32::from_rgb(232, 184, 74);
 const ERR: Color32 = Color32::from_rgb(240, 113, 120);
+const PINK: Color32 = Color32::from_rgb(245, 169, 184);
+const SKY: Color32 = Color32::from_rgb(91, 206, 250);
 const DEBOUNCE: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -30,6 +33,7 @@ enum View {
     Library,
     Saved,
     Settings,
+    Support,
 }
 
 enum Msg {
@@ -52,6 +56,10 @@ enum Msg {
         hints: Vec<github::CompatHint>,
         error: String,
     },
+    UpdateAvailable(Release),
+    UpdateProgress(String),
+    UpdateFailed(String),
+    UpdateReady(PathBuf),
 }
 
 struct DescWin {
@@ -112,6 +120,9 @@ pub struct App {
     index_status: String,
     index_running: bool,
     desc_windows: HashMap<String, DescWin>,
+    update: Option<Release>,
+    update_open: bool,
+    updating: bool,
 }
 
 fn setup_style(ctx: &egui::Context) {
@@ -141,23 +152,32 @@ fn setup_style(ctx: &egui::Context) {
 fn setup_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     let windir = std::env::var("WINDIR").unwrap_or_else(|_| r"C:\Windows".into());
-    let candidates = [
-        PathBuf::from(&windir).join("Fonts").join("segoeui.ttf"),
-        PathBuf::from("/System/Library/Fonts/Supplemental/Arial.ttf"),
-        PathBuf::from("/Library/Fonts/Arial.ttf"),
-        PathBuf::from("/System/Library/Fonts/Supplemental/Times New Roman.ttf"),
+    let dir = PathBuf::from(&windir).join("Fonts");
+    let extras = [
+        ("ui", dir.join("segoeui.ttf")),
+        ("ui", PathBuf::from("/System/Library/Fonts/Supplemental/Arial.ttf")),
+        ("sym", dir.join("seguisym.ttf")),
+        ("emoji", dir.join("seguiemj.ttf")),
+        ("cjk", dir.join("msyh.ttc")),
+        ("cjk-kr", dir.join("malgun.ttf")),
+        ("cjk-jp", dir.join("YuGothM.ttc")),
     ];
-    for p in candidates {
-        if let Ok(bytes) = std::fs::read(&p) {
+    let mut loaded = Vec::new();
+    for (name, path) in extras {
+        if loaded.iter().any(|n| *n == name) {
+            continue;
+        }
+        if let Ok(bytes) = std::fs::read(&path) {
             fonts
                 .font_data
-                .insert("ui".into(), egui::FontData::from_owned(bytes));
-            fonts
-                .families
-                .entry(egui::FontFamily::Proportional)
-                .or_default()
-                .insert(0, "ui".into());
-            break;
+                .insert(name.into(), egui::FontData::from_owned(bytes));
+            loaded.push(name);
+        }
+    }
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        let list = fonts.families.entry(family).or_default();
+        for name in loaded.iter().rev() {
+            list.insert(0, (*name).to_string());
         }
     }
     ctx.set_fonts(fonts);
@@ -167,6 +187,7 @@ impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         setup_style(&cc.egui_ctx);
         setup_fonts(&cc.egui_ctx);
+        egui_extras::install_image_loaders(&cc.egui_ctx);
         let (tx, rx) = mpsc::channel();
         let (index_tx, index_rx) = mpsc::channel();
         let settings = Settings::load();
@@ -214,6 +235,9 @@ impl App {
             },
             index_running: should_index,
             desc_windows: HashMap::new(),
+            update: None,
+            update_open: false,
+            updating: false,
         };
         let txv = tx.clone();
         let ctx = cc.egui_ctx.clone();
@@ -230,6 +254,7 @@ impl App {
                 false,
             );
         }
+        app.kick_update_check();
         app
     }
 
@@ -250,6 +275,40 @@ impl App {
             self.settings.curseforge_key.clone(),
             force,
         );
+    }
+
+    fn kick_update_check(&self) {
+        let tx = self.tx.clone();
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            if let Ok(Some(rel)) = update::latest() {
+                let _ = tx.send(Msg::UpdateAvailable(rel));
+                ctx.request_repaint();
+            }
+        });
+    }
+
+    fn start_app_update(&mut self) {
+        let Some(rel) = self.update.clone() else {
+            return;
+        };
+        self.updating = true;
+        self.status = "Downloading update…".into();
+        let tx = self.tx.clone();
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(Msg::UpdateProgress(format!("Downloading {}…", rel.asset_name)));
+            ctx.request_repaint();
+            match update::download_installer(&rel) {
+                Ok(path) => {
+                    let _ = tx.send(Msg::UpdateReady(path));
+                }
+                Err(e) => {
+                    let _ = tx.send(Msg::UpdateFailed(format!("Update failed: {e}")));
+                }
+            }
+            ctx.request_repaint();
+        });
     }
 
     fn load_catalog_hits(&mut self) {
@@ -473,6 +532,25 @@ impl App {
                         w.loading = false;
                     }
                 }
+                Msg::UpdateAvailable(rel) => {
+                    let skip = self.settings.skip_update == rel.tag;
+                    self.update = Some(rel);
+                    self.update_open = !skip;
+                }
+                Msg::UpdateProgress(s) => self.status = s,
+                Msg::UpdateFailed(s) => {
+                    self.updating = false;
+                    self.status = s;
+                }
+                Msg::UpdateReady(path) => {
+                    self.status = "Installing update… MCDB will restart.".into();
+                    let ctx = self.ctx.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(Duration::from_millis(600));
+                        let _ = update::launch_installer(&path);
+                    });
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
             }
         }
         while let Ok(ev) = self.index_rx.try_recv() {
@@ -497,7 +575,7 @@ impl App {
             }
         }
         if let Some(t) = self.last_edit {
-            if t.elapsed() >= DEBOUNCE && self.view != View::Settings {
+            if t.elapsed() >= DEBOUNCE && self.view != View::Settings && self.view != View::Support {
                 let plan = prompt::parse(&self.query);
                 self.prompt_note = prompt::summary(&plan);
                 if self.loading {
@@ -546,6 +624,7 @@ impl App {
             (View::Library, "Library"),
             (View::Saved, "Saved"),
             (View::Settings, "Settings"),
+            (View::Support, "Support ♡"),
         ] {
             if ui
                 .selectable_label(self.view == view, label)
@@ -554,7 +633,7 @@ impl App {
                 self.view = view;
                 if view == View::Catalog {
                     self.load_catalog_hits();
-                } else if view != View::Settings {
+                } else if view != View::Settings && view != View::Support {
                     self.last_edit = Some(Instant::now());
                 }
             }
@@ -1189,15 +1268,154 @@ impl App {
             gs.repos, gs.issues, gs.hints
         ));
         ui.label(RichText::new("Right-click a mod to fetch its page. If it has a GitHub repo, issues are stored and used for compatibility checks.").small().color(DIM));
+        ui.add_space(16.0);
+        ui.heading("Updates");
+        ui.label(format!("This build: {}", update::current()));
+        if ui.button("Check for updates").clicked() {
+            self.status = "Checking GitHub releases…".into();
+            self.kick_update_check();
+        }
+    }
+
+    fn support_panel(&mut self, ui: &mut egui::Ui) {
+        let full = ui.available_rect_before_wrap();
+        let stripe_h = 10.0;
+        let colors = [SKY, PINK, Color32::from_rgb(255, 255, 255), PINK, SKY];
+        let w = full.width() / colors.len() as f32;
+        for (i, c) in colors.iter().enumerate() {
+            ui.painter().rect_filled(
+                egui::Rect::from_min_size(
+                    egui::pos2(full.min.x + i as f32 * w, full.min.y),
+                    egui::vec2(w, stripe_h),
+                ),
+                0.0,
+                *c,
+            );
+        }
+        ui.add_space(18.0);
+        ui.label(RichText::new("hey, I'm NeofastFTL ♡").heading().color(PINK));
+        ui.label(RichText::new("transfem · she/her · I built MCDB so finding mods feels a little softer").color(SKY));
+        ui.add_space(10.0);
+        ui.label("Thank you for using my little Minecraft mod browser. I hope it saves you a few tabs and a bit of chaos.");
+        ui.add_space(8.0);
+        ui.label(RichText::new("If MCDB helped you, a GitHub star is the sweetest thank-you.").color(PINK));
+        ui.horizontal(|ui| {
+            if ui.button("Open GitHub ♡").clicked() {
+                util::open_url("https://github.com/NeofastFTL-Dev/MCModDatabase");
+            }
+            if ui.button("Releases").clicked() {
+                util::open_url("https://github.com/NeofastFTL-Dev/MCModDatabase/releases");
+            }
+        });
+        ui.add_space(16.0);
+        ui.heading(RichText::new("Support").color(SKY));
+        ui.label("Stars, issues, and kind notes keep this project alive. No pressure — just vibes.");
+        if let Some(rel) = &self.update {
+            ui.add_space(8.0);
+            ui.label(RichText::new(format!("A new build is waiting: {}", rel.tag)).color(PINK));
+            if ui.button("Download, install, restart").clicked() {
+                self.start_app_update();
+            }
+        } else {
+            ui.label(RichText::new(format!("You're on {} — I'll ping you when GitHub has a newer release.", update::current())).small().color(DIM));
+            if ui.button("Check now").clicked() {
+                self.kick_update_check();
+            }
+        }
+        ui.add_space(18.0);
+        ui.heading(RichText::new("ARR license").color(PINK));
+        ui.label(RichText::new("© 2026 NeofastFTL — All Rights Reserved").strong());
+        ui.label("The MCDB name, icon, and this app's presentation are mine. Please don't rebrand it as your own.");
+        ui.label("You're warmly welcome to use it, love it, and share it with friends.");
+        ui.label(RichText::new("Made with too much pink, a little sky blue, and a lot of stubborn girl energy.").italics().color(SKY));
+        ui.add_space(12.0);
+        ui.label(RichText::new("thank you for being here  ♡").color(PINK));
+    }
+
+    fn update_modal(&mut self, ctx: &egui::Context) {
+        if !self.update_open {
+            return;
+        }
+        let Some(rel) = self.update.clone() else {
+            return;
+        };
+        let mut close = false;
+        let mut skip = false;
+        let mut go = false;
+        let busy = self.updating;
+        egui::Window::new("New MCDB build ♡")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label(
+                    RichText::new(format!(
+                        "{} is out",
+                        if rel.name.is_empty() {
+                            rel.tag.clone()
+                        } else {
+                            rel.name.clone()
+                        }
+                    ))
+                    .strong()
+                    .color(PINK),
+                );
+                ui.label(
+                    RichText::new(format!(
+                        "You have {} · GitHub has {}",
+                        update::current(),
+                        rel.tag
+                    ))
+                    .small()
+                    .color(DIM),
+                );
+                if !rel.notes.is_empty() {
+                    ui.add_space(6.0);
+                    ui.label(RichText::new(&rel.notes).small());
+                }
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_enabled(!busy, egui::Button::new("Download, install, restart"))
+                        .clicked()
+                    {
+                        go = true;
+                    }
+                    if ui.button("Later").clicked() {
+                        close = true;
+                    }
+                    if ui.button("Skip this version").clicked() {
+                        skip = true;
+                    }
+                });
+                if busy {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label("Fetching the installer… then I'll close so it can replace me.");
+                    });
+                }
+            });
+        if go {
+            self.start_app_update();
+        }
+        if skip {
+            self.settings.skip_update = rel.tag;
+            self.settings.save();
+            close = true;
+        }
+        if close {
+            self.update_open = false;
+        }
     }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll();
-        if self.index_running || self.last_edit.is_some() || self.loading {
+        if self.index_running || self.last_edit.is_some() || self.loading || self.updating {
             ctx.request_repaint_after(Duration::from_millis(250));
         }
+        self.update_modal(ctx);
         egui::SidePanel::left("side")
             .default_width(230.0)
             .show(ctx, |ui| self.sidebar(ui));
@@ -1218,7 +1436,11 @@ impl eframe::App for App {
                     || ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter))
                 {
                     self.last_edit = None;
-                    if self.view != View::Library && self.view != View::Saved {
+                    if self.view != View::Library
+                        && self.view != View::Saved
+                        && self.view != View::Settings
+                        && self.view != View::Support
+                    {
                         self.view = View::Search;
                     }
                     self.kick_search();
@@ -1240,6 +1462,10 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.view == View::Settings {
                 self.settings_panel(ui);
+                return;
+            }
+            if self.view == View::Support {
+                self.support_panel(ui);
                 return;
             }
             if self.view == View::Catalog {

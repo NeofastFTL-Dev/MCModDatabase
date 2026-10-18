@@ -1,6 +1,6 @@
 [package]
 name = "mc-mod-database"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 description = "ModDB - search CurseForge and Modrinth mods"
 license = "MIT"
@@ -21,7 +21,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 eframe = { version = "0.29", default-features = true }
 egui = "0.29"
-egui_extras = "0.29"
+egui_extras = { version = "0.29", features = ["all_loaders"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 rfd = "0.15"
 ureq = { version = "2", default-features = false, features = ["native-tls", "json"] }
 native-tls = "0.2"

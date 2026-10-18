@@ -72,6 +72,27 @@ pub fn download_to<W: Write>(
     Ok(done)
 }
 
+pub fn get_bytes_limited(url: &str, max: usize) -> Result<Vec<u8>> {
+    let resp = agent()
+        .get(url)
+        .call()
+        .map_err(|e| anyhow!("{}", describe_err(e)))?;
+    let mut reader = resp.into_reader();
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut out = Vec::new();
+    loop {
+        let n = reader.read(&mut buf).context("read")?;
+        if n == 0 {
+            break;
+        }
+        if out.len().saturating_add(n) > max {
+            return Err(anyhow!("too large"));
+        }
+        out.extend_from_slice(&buf[..n]);
+    }
+    Ok(out)
+}
+
 pub fn get_text(url: &str) -> Result<String> {
     let mut v = Vec::new();
     download_to(url, &[], &mut v, |_, _| {})?;

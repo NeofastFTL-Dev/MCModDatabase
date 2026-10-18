@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/NeofastFTL-Dev/MCModDatabase/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/download-MCDB--1.0--release--opensource-3ee0a0?style=for-the-badge" alt="Download"></a>
+  <a href="https://github.com/NeofastFTL-Dev/MCModDatabase/releases/tag/v1.1.0"><img src="https://img.shields.io/badge/download-MCDB--1.1--release--opensource-3ee0a0?style=for-the-badge" alt="Download"></a>
   <img src="https://img.shields.io/badge/license-MIT-informational?style=for-the-badge" alt="MIT">
 </p>
 
@@ -43,7 +43,7 @@ Select several mods, then **Download to folder** or **Save zip**. MCDB resolves 
 
 ## Install
 
-1. Grab [**MCDB-1.0-release-opensource.exe**](https://github.com/NeofastFTL-Dev/MCModDatabase/releases/tag/v1.0.0)
+1. Grab [**MCDB-1.1-release-opensource.exe**](https://github.com/NeofastFTL-Dev/MCModDatabase/releases/tag/v1.1.0)
 2. Run the installer (installs to `Program Files\MCDB` and adds Start Menu + desktop shortcuts)
 3. Optional: in **Settings**, paste a [CurseForge API key](https://console.curseforge.com) if you want CurseForge results (Modrinth works without one)
 
@@ -67,7 +67,7 @@ Windows installer:
 makensis installer.nsi
 ```
 
-Output: `dist\MCDB-1.0-release-opensource.exe`
+Output: `dist\MCDB-1.1-release-opensource.exe`
 
 macOS app bundle: `macos/build.sh` (must run on a Mac).
 

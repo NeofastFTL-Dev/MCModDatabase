@@ -1,4 +1,6 @@
 use eframe::egui::{self, Color32, RichText};
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 const DIM: Color32 = Color32::from_rgb(141, 151, 168);
 const CODE_BG: Color32 = Color32::from_rgb(23, 28, 38);
@@ -15,6 +17,13 @@ struct Style {
 struct Inline {
     text: String,
     style: Style,
+    image: Option<String>,
+}
+
+enum Fetch {
+    Loading,
+    Done,
+    Fail,
 }
 
 pub fn render(ui: &mut egui::Ui, src: &str) {
@@ -36,37 +45,134 @@ pub fn render(ui: &mut egui::Ui, src: &str) {
 
 fn looks_like_html(s: &str) -> bool {
     let t = s.trim_start();
-    t.starts_with('<')
-        || t.contains("<p")
-        || t.contains("<div")
-        || t.contains("<br")
-        || t.contains("<h1")
-        || t.contains("<h2")
-        || t.contains("<img")
-        || t.contains("<span")
-        || t.contains("<ul")
-        || t.contains("<a ")
+    let l = t.to_ascii_lowercase();
+    if l.starts_with("<!doctype") || l.starts_with("<html") || l.starts_with("<p") || l.starts_with("<div") {
+        return true;
+    }
+    let markers = [
+        "<p>", "<p ", "<div", "<br", "<ul", "<ol", "<li", "<h1", "<h2", "<table", "<span", "<center",
+    ];
+    markers.iter().filter(|m| l.contains(*m)).count() >= 2
 }
 
-fn decode_entities(s: &str) -> String {
+fn named_entity(name: &str) -> Option<char> {
+    Some(match name {
+        "nbsp" => '\u{00a0}',
+        "amp" => '&',
+        "lt" => '<',
+        "gt" => '>',
+        "quot" => '"',
+        "apos" => '\'',
+        "mdash" => '—',
+        "ndash" => '–',
+        "hellip" => '…',
+        "copy" => '©',
+        "reg" => '®',
+        "trade" => '™',
+        "rsquo" | "rsquor" => '’',
+        "lsquo" => '‘',
+        "rdquo" => '”',
+        "ldquo" => '“',
+        "sbquo" => '‚',
+        "bdquo" => '„',
+        "bull" => '•',
+        "middot" => '·',
+        "times" => '×',
+        "minus" => '−',
+        "plusmn" => '±',
+        "raquo" => '»',
+        "laquo" => '«',
+        "deg" => '°',
+        "frac12" => '½',
+        "frac14" => '¼',
+        "frac34" => '¾',
+        "euro" => '€',
+        "pound" => '£',
+        "yen" => '¥',
+        "cent" => '¢',
+        "sect" => '§',
+        "para" => '¶',
+        "dagger" => '†',
+        "Dagger" => '‡',
+        "permil" => '‰',
+        "lsaquo" => '‹',
+        "rsaquo" => '›',
+        "iexcl" => '¡',
+        "iquest" => '¿',
+        "szlig" => 'ß',
+        "agrave" => 'à',
+        "aacute" => 'á',
+        "acirc" => 'â',
+        "atilde" => 'ã',
+        "auml" => 'ä',
+        "aring" => 'å',
+        "aelig" => 'æ',
+        "ccedil" => 'ç',
+        "egrave" => 'è',
+        "eacute" => 'é',
+        "ecirc" => 'ê',
+        "euml" => 'ë',
+        "igrave" => 'ì',
+        "iacute" => 'í',
+        "icirc" => 'î',
+        "iuml" => 'ï',
+        "eth" => 'ð',
+        "ntilde" => 'ñ',
+        "ograve" => 'ò',
+        "oacute" => 'ó',
+        "ocirc" => 'ô',
+        "otilde" => 'õ',
+        "ouml" => 'ö',
+        "oslash" => 'ø',
+        "ugrave" => 'ù',
+        "uacute" => 'ú',
+        "ucirc" => 'û',
+        "uuml" => 'ü',
+        "yacute" => 'ý',
+        "yuml" => 'ÿ',
+        "thorn" => 'þ',
+        "Agrave" => 'À',
+        "Aacute" => 'Á',
+        "Acirc" => 'Â',
+        "Atilde" => 'Ã',
+        "Auml" => 'Ä',
+        "Aring" => 'Å',
+        "AElig" => 'Æ',
+        "Ccedil" => 'Ç',
+        "Egrave" => 'È',
+        "Eacute" => 'É',
+        "Ecirc" => 'Ê',
+        "Euml" => 'Ë',
+        "Igrave" => 'Ì',
+        "Iacute" => 'Í',
+        "Icirc" => 'Î',
+        "Iuml" => 'Ï',
+        "Ntilde" => 'Ñ',
+        "Ograve" => 'Ò',
+        "Oacute" => 'Ó',
+        "Ocirc" => 'Ô',
+        "Otilde" => 'Õ',
+        "Ouml" => 'Ö',
+        "Oslash" => 'Ø',
+        "Ugrave" => 'Ù',
+        "Uacute" => 'Ú',
+        "Ucirc" => 'Û',
+        "Uuml" => 'Ü',
+        "Yacute" => 'Ý',
+        "fnof" => 'ƒ',
+        "circ" => 'ˆ',
+        "tilde" => '˜',
+        _ => return None,
+    })
+}
+
+fn decode_entities_once(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut rest = s;
     while let Some(i) = rest.find('&') {
         out.push_str(&rest[..i]);
         rest = &rest[i..];
-        let (ch, n) = if rest.starts_with("&nbsp;") {
-            ('\u{00a0}', 6)
-        } else if rest.starts_with("&amp;") {
-            ('&', 5)
-        } else if rest.starts_with("&lt;") {
-            ('<', 4)
-        } else if rest.starts_with("&gt;") {
-            ('>', 4)
-        } else if rest.starts_with("&quot;") {
-            ('"', 6)
-        } else if rest.starts_with("&#39;") || rest.starts_with("&apos;") {
-            ('\'', if rest.starts_with("&#39;") { 5 } else { 6 })
-        } else if rest.starts_with("&#x") || rest.starts_with("&#X") {
+        if rest.starts_with("&#x") || rest.starts_with("&#X") {
             if let Some(end) = rest.find(';') {
                 let hex = &rest[3..end];
                 if let Ok(v) = u32::from_str_radix(hex, 16) {
@@ -77,9 +183,6 @@ fn decode_entities(s: &str) -> String {
                     }
                 }
             }
-            out.push('&');
-            rest = &rest[1..];
-            continue;
         } else if rest.starts_with("&#") {
             if let Some(end) = rest.find(';') {
                 let num = &rest[2..end];
@@ -91,19 +194,208 @@ fn decode_entities(s: &str) -> String {
                     }
                 }
             }
-            out.push('&');
-            rest = &rest[1..];
-            continue;
-        } else {
-            out.push('&');
-            rest = &rest[1..];
-            continue;
-        };
-        out.push(ch);
-        rest = &rest[n..];
+        } else if let Some(end) = rest.find(';') {
+            if end > 1 && end <= 10 {
+                let name = &rest[1..end];
+                if let Some(c) = named_entity(name) {
+                    out.push(c);
+                    rest = &rest[end + 1..];
+                    continue;
+                }
+            }
+        }
+        out.push('&');
+        rest = &rest[1..];
     }
     out.push_str(rest);
     out.replace('\u{00a0}', " ")
+}
+
+fn decode_entities(s: &str) -> String {
+    let once = decode_entities_once(s);
+    if once.contains('&') {
+        decode_entities_once(&once)
+    } else {
+        once
+    }
+}
+
+fn intern_uri(url: &str) -> &'static str {
+    static MAP: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+    let mut map = MAP
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if let Some(u) = map.get(url) {
+        return u;
+    }
+    let leaked: &'static str = Box::leak(url.to_string().into_boxed_str());
+    map.insert(url.to_string(), leaked);
+    leaked
+}
+
+fn fetch_map() -> &'static Mutex<HashMap<&'static str, Fetch>> {
+    static MAP: OnceLock<Mutex<HashMap<&'static str, Fetch>>> = OnceLock::new();
+    MAP.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn decode_data_url(url: &str) -> Option<Vec<u8>> {
+    let comma = url.find(',')?;
+    let (meta, data) = url.split_at(comma);
+    let data = data[1..].as_bytes();
+    if !meta.to_ascii_lowercase().contains(";base64") {
+        return Some(data.to_vec());
+    }
+    fn val(c: u8) -> Option<u8> {
+        Some(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' | b'-' => 62,
+            b'/' | b'_' => 63,
+            _ => return None,
+        })
+    }
+    let mut out = Vec::with_capacity(data.len() * 3 / 4);
+    let filtered: Vec<u8> = data
+        .iter()
+        .copied()
+        .filter(|c| !c.is_ascii_whitespace() && *c != b'=')
+        .collect();
+    let mut i = 0;
+    while i + 3 < filtered.len() {
+        let a = val(filtered[i])?;
+        let b = val(filtered[i + 1])?;
+        let c = val(filtered[i + 2])?;
+        let d = val(filtered[i + 3])?;
+        out.push((a << 2) | (b >> 4));
+        out.push((b << 4) | (c >> 2));
+        out.push((c << 6) | d);
+        i += 4;
+    }
+    if i + 1 < filtered.len() {
+        let a = val(filtered[i])?;
+        let b = val(filtered[i + 1])?;
+        out.push((a << 2) | (b >> 4));
+        if i + 2 < filtered.len() {
+            let c = val(filtered[i + 2])?;
+            out.push((b << 4) | (c >> 2));
+        }
+    }
+    Some(out)
+}
+
+fn normalize_url(src: &str) -> Option<String> {
+    let s = decode_entities(src)
+        .trim()
+        .trim_matches(|c| c == '"' || c == '\'')
+        .to_string();
+    if s.is_empty() || s.starts_with("javascript:") {
+        return None;
+    }
+    if s.starts_with("data:image/") {
+        return Some(s);
+    }
+    if let Some(rest) = s.strip_prefix("//") {
+        return Some(format!("https://{rest}"));
+    }
+    if s.starts_with("https://") || s.starts_with("http://") {
+        return Some(s);
+    }
+    None
+}
+
+fn kick_fetch(ctx: &egui::Context, url: &'static str) {
+    {
+        let mut st = fetch_map().lock().unwrap_or_else(|e| e.into_inner());
+        if st.contains_key(url) {
+            return;
+        }
+        st.insert(url, Fetch::Loading);
+    }
+    if url.starts_with("data:") {
+        if let Some(bytes) = decode_data_url(url) {
+            ctx.include_bytes(url, bytes);
+            fetch_map()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(url, Fetch::Done);
+        } else {
+            fetch_map()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(url, Fetch::Fail);
+        }
+        return;
+    }
+    let ctx = ctx.clone();
+    std::thread::spawn(move || {
+        let ok = crate::net::get_bytes_limited(url, 8 * 1024 * 1024)
+            .ok()
+            .filter(|b| !b.is_empty());
+        let mut st = fetch_map().lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(bytes) = ok {
+            ctx.include_bytes(url, bytes);
+            st.insert(url, Fetch::Done);
+        } else {
+            st.insert(url, Fetch::Fail);
+        }
+        drop(st);
+        ctx.request_repaint();
+    });
+}
+
+fn show_image(ui: &mut egui::Ui, src: &str, alt: &str) {
+    let Some(url) = normalize_url(src) else {
+        if !alt.is_empty() {
+            ui.label(RichText::new(alt).italics().color(DIM));
+        }
+        return;
+    };
+    let uri = intern_uri(&url);
+    kick_fetch(ui.ctx(), uri);
+    let state = fetch_map()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(uri)
+        .map(|s| match s {
+            Fetch::Loading => 0u8,
+            Fetch::Done => 1,
+            Fetch::Fail => 2,
+        })
+        .unwrap_or(0);
+    match state {
+        1 => {
+            let max_w = ui.available_width().min(560.0);
+            let resp = ui.add(
+                egui::Image::new(uri)
+                    .max_width(max_w)
+                    .max_height(420.0)
+                    .maintain_aspect_ratio(true),
+            );
+            if !alt.is_empty() {
+                resp.on_hover_text(alt);
+            }
+        }
+        2 => {
+            let label = if alt.is_empty() { "[image]" } else { alt };
+            if url.starts_with("http") {
+                ui.hyperlink_to(label, &url);
+            } else {
+                ui.label(RichText::new(label).italics().color(DIM));
+            }
+        }
+        _ => {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(RichText::new(if alt.is_empty() {
+                    "Loading image…"
+                } else {
+                    alt
+                }).color(DIM));
+            });
+        }
+    }
 }
 
 fn apply(text: &str, st: &Style) -> RichText {
@@ -137,6 +429,10 @@ fn flush(ui: &mut egui::Ui, buf: &mut Vec<Inline>) {
             if inl.text.is_empty() {
                 continue;
             }
+            if let Some(url) = &inl.image {
+                show_image(ui, url, &inl.text);
+                continue;
+            }
             for chunk in inl.text.split_inclusive(|c: char| c.is_whitespace()) {
                 if chunk.is_empty() {
                     continue;
@@ -159,7 +455,8 @@ fn push_text(buf: &mut Vec<Inline>, text: &str, st: &Style) {
         return;
     }
     if let Some(last) = buf.last_mut() {
-        if last.style.bold == st.bold
+        if last.image.is_none()
+            && last.style.bold == st.bold
             && last.style.italic == st.italic
             && last.style.code == st.code
             && last.style.heading == st.heading
@@ -172,6 +469,15 @@ fn push_text(buf: &mut Vec<Inline>, text: &str, st: &Style) {
     buf.push(Inline {
         text,
         style: st.clone(),
+        image: None,
+    });
+}
+
+fn push_image(buf: &mut Vec<Inline>, url: String, alt: String) {
+    buf.push(Inline {
+        text: alt,
+        style: Style::default(),
+        image: Some(url),
     });
 }
 
@@ -255,21 +561,12 @@ fn render_html(ui: &mut egui::Ui, html: &str) {
                 ui.separator();
             }
             (false, "img") => {
+                flush(ui, &mut buf);
                 let alt = attr(raw, "alt").unwrap_or_default();
-                let src = attr(raw, "src").unwrap_or_default();
-                let label = if alt.is_empty() { "[image]".into() } else { alt };
-                if src.starts_with("http") {
-                    buf.push(Inline {
-                        text: label,
-                        style: Style {
-                            italic: true,
-                            link: Some(src),
-                            ..st.clone()
-                        },
-                    });
-                } else {
-                    push_text(&mut buf, &format!(" {label} "), &Style { italic: true, ..st.clone() });
-                }
+                let src = attr(raw, "src")
+                    .or_else(|| attr(raw, "data-src"))
+                    .unwrap_or_default();
+                show_image(ui, &src, &alt);
             }
             (false, "p" | "div" | "section" | "article" | "tr" | "blockquote" | "pre" | "ul" | "ol" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6") => {
                 flush(ui, &mut buf);
@@ -426,6 +723,39 @@ fn parse_md_inlines(buf: &mut Vec<Inline>, s: &str, st: &mut Style) {
             push_text(buf, &code, &cs);
             continue;
         }
+        if chars[i] == '!' && i + 1 < chars.len() && chars[i + 1] == '[' {
+            if let Some((text, url, n)) = parse_md_link(&chars[i + 1..]) {
+                flush_acc(buf, &mut acc, st);
+                push_image(buf, url, text);
+                i += 1 + n;
+                continue;
+            }
+        }
+        if chars[i] == '<' {
+            let rest: String = chars[i..].iter().collect();
+            let low = rest.to_ascii_lowercase();
+            if low.starts_with("<img") {
+                if let Some(end) = rest.find('>') {
+                    let tag = &rest[1..end];
+                    flush_acc(buf, &mut acc, st);
+                    let alt = attr(tag, "alt").unwrap_or_default();
+                    let src = attr(tag, "src")
+                        .or_else(|| attr(tag, "data-src"))
+                        .unwrap_or_default();
+                    push_image(buf, src, alt);
+                    i += end + 1;
+                    continue;
+                }
+            }
+            if low.starts_with("<br") {
+                if let Some(end) = rest.find('>') {
+                    flush_acc(buf, &mut acc, st);
+                    push_text(buf, "\n", st);
+                    i += end + 1;
+                    continue;
+                }
+            }
+        }
         if chars[i] == '[' {
             if let Some((text, url, n)) = parse_md_link(&chars[i..]) {
                 flush_acc(buf, &mut acc, st);
@@ -476,5 +806,10 @@ fn parse_md_link(chars: &[char]) -> Option<(String, String, usize)> {
     if i >= chars.len() {
         return None;
     }
+    let url = url
+        .split_whitespace()
+        .next()
+        .unwrap_or(url.as_str())
+        .to_string();
     Some((text, url, i + 1))
 }
