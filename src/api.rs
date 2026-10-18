@@ -379,7 +379,7 @@ pub fn search(
     }
     if source == "all" || source == "curseforge" {
         if cf_key.trim().is_empty() {
-            warnings.push("CurseForge skipped — add an API key in Settings.".into());
+            warnings.push("CurseForge skipped - add an API key in Settings.".into());
         } else {
             match search_curseforge(
                 cf_key,

@@ -239,7 +239,7 @@ fn run(
             emit(
                 tx,
                 ctx,
-                "CurseForge skipped — add an API key in Settings.".into(),
+                "CurseForge skipped - add an API key in Settings.".into(),
                 mr,
                 cf,
             );

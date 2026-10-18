@@ -127,6 +127,7 @@ pub struct App {
     update_open: bool,
     updating: bool,
     pack_plan: Option<pack::PackPlan>,
+    pack_source: String,
 }
 
 fn setup_style(ctx: &egui::Context) {
@@ -243,6 +244,7 @@ impl App {
             update_open: false,
             updating: false,
             pack_plan: None,
+            pack_source: "all".into(),
         };
         let txv = tx.clone();
         let ctx = cc.egui_ctx.clone();
@@ -324,14 +326,15 @@ impl App {
         }
         let gv = self.version.clone();
         let loader = self.loader.clone();
-        let ptype = self.project_type.clone();
+let ptype = self.project_type.clone();
         let cf = self.settings.curseforge_key.clone();
+        let psrc = self.pack_source.clone();
         self.loading = true;
-        self.status = "Building a pack from your description…".into();
+        self.status = "Building a pack from your description...".into();
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
         std::thread::spawn(move || {
-            let plan = pack::build(&desc, &gv, &loader, &ptype, &cf);
+            let plan = pack::build(&desc, &gv, &loader, &ptype, &cf, &psrc);
             let _ = tx.send(Msg::PackDone(plan));
             ctx.request_repaint();
         });
@@ -968,7 +971,7 @@ impl App {
         for (i, (k, win)) in self.desc_windows.iter_mut().enumerate() {
             let mut open = win.open;
             let offset = 24.0 * i as f32;
-            let title = format!("{} — description", win.hit.name);
+            let title = format!("{} - description", win.hit.name);
             egui::Window::new(title)
                 .id(egui::Id::new(("modpage", k.as_str())))
                 .open(&mut open)
@@ -1034,7 +1037,7 @@ impl App {
                         for h in win.hints.iter().take(12) {
                             let color = if h.severity == "warn" { WARN } else { DIM };
                             ui.label(
-                                RichText::new(format!("{} · {} — {}", h.kind, h.target, h.detail))
+                                RichText::new(format!("{} · {} - {}", h.kind, h.target, h.detail))
                                     .small()
                                     .color(color),
                             );
@@ -1316,11 +1319,33 @@ impl App {
         ui.heading("AI pack builder ♡");
         ui.label("Describe the pack you want and I'll pick mods for you.");
         ui.add_space(8.0);
+        ui.label(RichText::new("Source").small().color(DIM));
+        let psrc = if self.pack_source == "curseforge" {
+            "CurseForge only"
+        } else if self.pack_source == "modrinth" {
+            "Modrinth only"
+        } else {
+            "Both sites"
+        };
+        egui::ComboBox::from_id_salt("pack-source")
+            .selected_text(psrc)
+            .show_ui(ui, |ui| {
+                for (v, l) in [
+                    ("all", "Both sites"),
+                    ("curseforge", "CurseForge only"),
+                    ("modrinth", "Modrinth only"),
+                ] {
+                    if ui.selectable_label(self.pack_source == v, l).clicked() {
+                        self.pack_source = v.to_string();
+                    }
+                }
+            });
+        ui.add_space(8.0);
         let resp = ui.add(
             egui::TextEdit::multiline(&mut self.query)
                 .desired_width(ui.available_width())
                 .desired_rows(3)
-                .hint_text("e.g. tech and magic storage for 1.21.1, fabric, with mekanism, applied energies, botania, and some light"),
+                .hint_text("e.g. tech and magic storage for 1.20.1 forge with mekanism, applied energies, botania, and some light"),
         );
         if resp.changed() {
             self.last_edit = Some(Instant::now());
@@ -1365,7 +1390,7 @@ impl App {
             ui.add_space(6.0);
             ui.label(RichText::new(format!("{} mods · {} · {}", plan.mods.len(), plan.loader, plan.game_version)).small().color(DIM));
             for m in &plan.mods {
-                ui.label(RichText::new(format!("· {} — {} ({})", m.name, m.author, m.source)).small());
+                ui.label(RichText::new(format!("· {} - {} ({})", m.name, m.author, m.source)).small());
             }
         } else if self.loading {
             ui.add_space(8.0);
@@ -1405,7 +1430,7 @@ impl App {
         });
         ui.add_space(16.0);
         ui.heading(RichText::new("Support").color(SKY));
-        ui.label("Stars, issues, and kind notes keep this project alive. No pressure — just vibes.");
+        ui.label("Stars, issues, and kind notes keep this project alive. No pressure, just vibes.");
         if let Some(rel) = &self.update {
             ui.add_space(8.0);
             ui.label(RichText::new(format!("A new build is waiting: {}", rel.tag)).color(PINK));
@@ -1413,14 +1438,14 @@ impl App {
                 self.start_app_update();
             }
         } else {
-            ui.label(RichText::new(format!("You're on {} — I'll ping you when GitHub has a newer release.", update::current())).small().color(DIM));
+            ui.label(RichText::new(format!("You're on {} - I'll ping you when GitHub has a newer release.", update::current())).small().color(DIM));
             if ui.button("Check now").clicked() {
                 self.kick_update_check();
             }
         }
         ui.add_space(18.0);
         ui.heading(RichText::new("ARR license").color(PINK));
-        ui.label(RichText::new("© 2026 NeofastFTL — All Rights Reserved").strong());
+        ui.label(RichText::new("Copyright 2026 NeofastFTL - All Rights Reserved").strong());
         ui.label("The MCDB name, icon, and this app's presentation are mine. Please don't rebrand it as your own.");
         ui.label("You're warmly welcome to use it, love it, and share it with friends.");
         ui.label(RichText::new("Made with too much pink, a little sky blue, and a lot of stubborn girl energy.").italics().color(SKY));

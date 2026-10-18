@@ -35,7 +35,7 @@ Select several mods, then **Download to folder** or **Save zip**. MCDB resolves 
 - Search CurseForge + Modrinth together, or one site at a time
 - Natural-language Find prompt (loader, version, themes, mod names)
 - Local catalog with theme browse and full-text search
-- **Pack** — describe a modpack and I'll pick compatible mods for your loader/version
+- **Pack** - describe a modpack and I'll pick compatible mods for your loader/version
 - Compatibility check on a multi-mod selection
 - Download to a folder or a zip
 - Right-click a mod for its description, links, and GitHub issues when a repo exists

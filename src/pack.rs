@@ -67,6 +67,7 @@ pub fn build(
     loader: &str,
     project_type: &str,
     cf_key: &str,
+    source: &str,
 ) -> PackPlan {
     let plan = prompt::parse(description);
     let mut seen = std::collections::HashSet::new();
@@ -91,9 +92,14 @@ pub fn build(
             queries.push(theme.clone());
         }
     }
+    let sources: Vec<&str> = match source {
+        "curseforge" => vec!["curseforge"],
+        "modrinth" => vec!["modrinth"],
+        _ => vec!["modrinth", "curseforge"],
+    };
     for q in &queries {
-        for source in ["modrinth", "curseforge"] {
-            if source == "curseforge" && cf_key.trim().is_empty() {
+        for source in &sources {
+            if *source == "curseforge" && cf_key.trim().is_empty() {
                 continue;
             }
             let (hits, _, _) = api::search(
@@ -107,12 +113,12 @@ pub fn build(
                 24,
                 cf_key,
             );
-for h in hits {
-                    let k = api::key(&h);
-                    if seen.insert(k) {
-                        cands.push((h.clone(), score(&h, &plan)));
-                    }
+            for h in hits {
+                let k = api::key(&h);
+                if seen.insert(k) {
+                    cands.push((h.clone(), score(&h, &plan)));
                 }
+            }
         }
     }
     cands.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| b.0.downloads.cmp(&a.0.downloads)));
@@ -125,9 +131,9 @@ for h in hits {
     let note = if picked.is_empty() {
         "No mods matched that description. Try fewer words or a different loader/version.".into()
     } else if report.as_ref().map(|r| r.ok).unwrap_or(true) {
-        format!("Picked {} mods — all compatible with {} {}", picked.len(), loader, game_version)
+        format!("Picked {} mods - all compatible with {} {}", picked.len(), loader, game_version)
     } else {
-        "Picked mods — some may need a different loader or version.".into()
+        "Picked mods - some may need a different loader or version.".into()
     };
     PackPlan {
         game_version: game_version.to_string(),
