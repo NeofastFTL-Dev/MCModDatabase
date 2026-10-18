@@ -7,6 +7,7 @@ pub mod gui;
 pub mod index;
 pub mod net;
 pub mod rich;
+pub mod pack;
 pub mod prompt;
 pub mod settings;
 pub mod update;

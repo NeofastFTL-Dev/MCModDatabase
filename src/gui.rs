@@ -5,6 +5,7 @@ use crate::compat::{self, PackReport};
 use crate::github;
 use crate::index;
 use crate::prompt;
+use crate::pack;
 use crate::settings::Settings;
 use crate::update::{self, Release};
 use crate::util::{self, fmt_count};
@@ -34,6 +35,7 @@ enum View {
     Saved,
     Settings,
     Support,
+    Pack,
 }
 
 enum Msg {
@@ -60,6 +62,7 @@ enum Msg {
     UpdateProgress(String),
     UpdateFailed(String),
     UpdateReady(PathBuf),
+    PackDone(pack::PackPlan),
 }
 
 struct DescWin {
@@ -123,6 +126,7 @@ pub struct App {
     update: Option<Release>,
     update_open: bool,
     updating: bool,
+    pack_plan: Option<pack::PackPlan>,
 }
 
 fn setup_style(ctx: &egui::Context) {
@@ -238,6 +242,7 @@ impl App {
             update: None,
             update_open: false,
             updating: false,
+            pack_plan: None,
         };
         let txv = tx.clone();
         let ctx = cc.egui_ctx.clone();
@@ -311,7 +316,27 @@ impl App {
         });
     }
 
-    fn load_catalog_hits(&mut self) {
+    fn build_pack(&mut self) {
+        let desc = self.query.trim().to_string();
+        if desc.is_empty() {
+            self.status = "Describe the pack you want.".into();
+            return;
+        }
+        let gv = self.version.clone();
+        let loader = self.loader.clone();
+        let ptype = self.project_type.clone();
+        let cf = self.settings.curseforge_key.clone();
+        self.loading = true;
+        self.status = "Building a pack from your description…".into();
+        let tx = self.tx.clone();
+        let ctx = self.ctx.clone();
+        std::thread::spawn(move || {
+            let plan = pack::build(&desc, &gv, &loader, &ptype, &cf);
+            let _ = tx.send(Msg::PackDone(plan));
+            ctx.request_repaint();
+        });
+    }
+        fn load_catalog_hits(&mut self) {
         let q = self.query.trim().to_string();
         let source = self.source.clone();
         let loader = self.loader.clone();
@@ -551,6 +576,15 @@ impl App {
                     });
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
+                Msg::PackDone(plan) => {
+                    self.loading = false;
+                    self.pack_plan = Some(plan.clone());
+                    self.status = if plan.mods.is_empty() {
+                        "No mods matched that description.".into()
+                    } else {
+                        format!("Picked {} mods", plan.mods.len())
+                    };
+                }
             }
         }
         while let Ok(ev) = self.index_rx.try_recv() {
@@ -575,7 +609,7 @@ impl App {
             }
         }
         if let Some(t) = self.last_edit {
-            if t.elapsed() >= DEBOUNCE && self.view != View::Settings && self.view != View::Support {
+            if t.elapsed() >= DEBOUNCE && self.view != View::Settings && self.view != View::Support && self.view != View::Pack {
                 let plan = prompt::parse(&self.query);
                 self.prompt_note = prompt::summary(&plan);
                 if self.loading {
@@ -625,6 +659,7 @@ impl App {
             (View::Saved, "Saved"),
             (View::Settings, "Settings"),
             (View::Support, "Support ♡"),
+            (View::Pack, "Pack"),
         ] {
             if ui
                 .selectable_label(self.view == view, label)
@@ -633,7 +668,7 @@ impl App {
                 self.view = view;
                 if view == View::Catalog {
                     self.load_catalog_hits();
-                } else if view != View::Settings && view != View::Support {
+                } else if view != View::Settings && view != View::Support && view != View::Pack {
                     self.last_edit = Some(Instant::now());
                 }
             }
@@ -1277,6 +1312,67 @@ impl App {
         }
     }
 
+    fn pack_panel(&mut self, ui: &mut egui::Ui) {
+        ui.heading("AI pack builder ♡");
+        ui.label("Describe the pack you want and I'll pick mods for you.");
+        ui.add_space(8.0);
+        let resp = ui.add(
+            egui::TextEdit::multiline(&mut self.query)
+                .desired_width(ui.available_width())
+                .desired_rows(3)
+                .hint_text("e.g. tech and magic storage for 1.21.1, fabric, with mekanism, applied energies, botania, and some light"),
+        );
+        if resp.changed() {
+            self.last_edit = Some(Instant::now());
+        }
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            if ui.button("Build pack").clicked() {
+                self.build_pack();
+            }
+            if ui.button("Download pack").clicked() {
+                if let Some(plan) = &self.pack_plan {
+                    let mods: Vec<ModHit> = plan.mods.clone();
+                    if mods.is_empty() {
+                        self.status = "Build a pack first.".into();
+                    } else {
+                        for m in &mods {
+                            self.selected.insert(api::key(m), m.clone());
+                        }
+                        if let Some(dir) = rfd::FileDialog::new().pick_folder() {
+                            self.start_download(dir, false);
+                        }
+                    }
+                }
+            }
+            if ui.button("Clear").clicked() {
+                self.pack_plan = None;
+                self.selected.clear();
+            }
+        });
+        if let Some(plan) = &self.pack_plan {
+            ui.add_space(12.0);
+            ui.label(RichText::new(&plan.note).color(ACCENT));
+            if let Some(rep) = &plan.report {
+                if !rep.issues.is_empty() {
+                    ui.add_space(6.0);
+                    for issue in &rep.issues {
+                        let c = if issue.severity == "error" { ERR } else if issue.severity == "warn" { WARN } else { DIM };
+                        ui.label(RichText::new(format!("· {}", issue.message)).color(c));
+                    }
+                }
+            }
+            ui.add_space(6.0);
+            ui.label(RichText::new(format!("{} mods · {} · {}", plan.mods.len(), plan.loader, plan.game_version)).small().color(DIM));
+            for m in &plan.mods {
+                ui.label(RichText::new(format!("· {} — {} ({})", m.name, m.author, m.source)).small());
+            }
+        } else if self.loading {
+            ui.add_space(8.0);
+            ui.spinner();
+        }
+    }
+
     fn support_panel(&mut self, ui: &mut egui::Ui) {
         let full = ui.available_rect_before_wrap();
         let stripe_h = 10.0;
@@ -1440,10 +1536,15 @@ impl eframe::App for App {
                         && self.view != View::Saved
                         && self.view != View::Settings
                         && self.view != View::Support
+                        && self.view != View::Pack
                     {
                         self.view = View::Search;
                     }
-                    self.kick_search();
+                    if self.view == View::Pack {
+                        self.build_pack();
+                    } else {
+                        self.kick_search();
+                    }
                 }
             });
             if !self.prompt_note.is_empty() {
@@ -1466,6 +1567,10 @@ impl eframe::App for App {
             }
             if self.view == View::Support {
                 self.support_panel(ui);
+                return;
+            }
+            if self.view == View::Pack {
+                self.pack_panel(ui);
                 return;
             }
             if self.view == View::Catalog {
