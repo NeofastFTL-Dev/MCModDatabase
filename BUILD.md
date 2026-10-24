@@ -220,8 +220,9 @@ API key (a default key is compiled in; you can override it in **Settings**).
 
 `.github/workflows/macos.yml` builds the universal `.app` on a GitHub-hosted macOS
 Sequoia runner. It runs on manual dispatch and on `v*` tags, and uploads
-`MCDB-macos` (the zip) as a build artifact. It does not create a GitHub Release, and
-there are no Windows or Linux CI jobs.
+`MCDB-macos` (the zip) as a build artifact. On a `v*` tag it also creates that
+release if needed and attaches the zip, giving a public download link; manual runs only
+produce the artifact. There are no Windows or Linux CI jobs.
 
 This only works from a GitHub repository you can push to. The local `origin` currently
 points at `https://github.com/NeofastFTL-Dev/MCModDatabase.git`, and that URL is
@@ -273,8 +274,18 @@ repository already has commits, run `git pull --rebase origin main` and push aga
 
 GitHub → your repository → **Actions** → **macOS build** → **Run workflow** → branch
 `main`. The button only appears once the workflow file is on the default branch. If
-Actions is disabled, enable it under **Settings → Actions → General**. Pushing a `v*`
-tag also triggers a build.
+Actions is disabled, enable it under **Settings → Actions → General**.
+
+To publish a version instead, tag the commit you built and push the tag:
+
+```bash
+git tag v1.1.1
+git push origin v1.1.1
+```
+
+A `v*` tag runs the same build and then creates that GitHub Release (if it does not
+exist) and attaches the zip to it. The tag must point at a commit that contains the
+workflow, otherwise no run is queued.
 
 ### 5. Download the app
 
@@ -282,8 +293,9 @@ The run takes roughly 5–10 minutes. Open the finished run and download the
 `MCDB-macos` artifact (kept for 30 days), then unzip it to find
 `MCDB-1.1.0-macos-universal.zip` and unzip that for `ModDB.app`.
 
-Artifact downloads require being signed in to GitHub, so this is not a public download
-link. Attaching the zip to a Release is a separate step that the workflow does not do.
+Artifact downloads require being signed in to GitHub, so the artifact is not a public
+download link. Tag builds also attach the same zip to the release, which is the
+public link to share: `https://github.com/<owner>/<repo>/releases`.
 
 ## App data and settings
 
