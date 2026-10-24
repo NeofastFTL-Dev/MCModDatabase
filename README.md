@@ -10,13 +10,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/NeofastFTL-Dev/MCModDatabase/releases/tag/v1.1.0"><img src="https://img.shields.io/badge/download-MCDB--1.1--release--opensource-3ee0a0?style=for-the-badge" alt="Download"></a>
+  <a href="https://github.com/NeofastFTL-Dev/MCModDatabase/releases/tag/v1.2.0"><img src="https://img.shields.io/badge/download-MCDB--1.2--release--opensource-3ee0a0?style=for-the-badge" alt="Download"></a>
   <img src="https://img.shields.io/badge/license-MIT-informational?style=for-the-badge" alt="MIT">
 </p>
 
 ## What it does
 
-MCDB is a Windows app (ModDB) that talks to **Modrinth** and **CurseForge** so you can find mods without opening a browser. Type a normal sentence, filter by loader and Minecraft version, then pick the jars you want.
+MCDB is a desktop app for Windows and macOS (ModDB) that talks to **Modrinth** and **CurseForge** so you can find mods without opening a browser. Type a normal sentence, filter by loader and Minecraft version, then pick the jars you want.
 
 ![Find prompt searching lighting mods](docs/search.png)
 
@@ -43,9 +43,18 @@ Select several mods, then **Download to folder** or **Save zip**. MCDB resolves 
 
 ## Install
 
-1. Grab [**MCDB-1.1-release-opensource.exe**](https://github.com/NeofastFTL-Dev/MCModDatabase/releases/tag/v1.1.0)
+**Windows**
+
+1. Grab [**MCDB-1.2-release-opensource.exe**](https://github.com/NeofastFTL-Dev/MCModDatabase/releases/tag/v1.2.0)
 2. Run the installer (installs to `Program Files\MCDB` and adds Start Menu + desktop shortcuts)
-3. Optional: in **Settings**, paste a [CurseForge API key](https://console.curseforge.com) if you want CurseForge results (Modrinth works without one)
+
+**macOS** (Apple Silicon + Intel, macOS 11 or later)
+
+1. Grab **MCDB-1.2.0-macos-universal.zip** from the same release
+2. Unzip it and drag **ModDB.app** into Applications
+3. First launch: right-click **ModDB.app** → **Open**, because the app is not notarized
+
+Optional on either platform: in **Settings**, paste a [CurseForge API key](https://console.curseforge.com) if you want CurseForge results (Modrinth works without one)
 
 ## Use it
 
@@ -69,7 +78,7 @@ Windows installer:
 makensis installer.nsi
 ```
 
-Output: `dist\MCDB-1.1-release-opensource.exe`
+Output: `dist\MCDB-1.2-release-opensource.exe`
 
 macOS app bundle (universal, Apple Silicon + Intel):
 
@@ -77,9 +86,9 @@ macOS app bundle (universal, Apple Silicon + Intel):
 bash macos/build.sh
 ```
 
-Must run on a Mac (Apple clang and the SDK are required). Output: `dist/macos/ModDB.app` and `dist/macos/MCDB-1.1.0-macos-universal.zip`, ad-hoc signed. Needs macOS 11 or later, so it runs on Sequoia 15.x.
+Must run on a Mac (Apple clang and the SDK are required). Output: `dist/macos/ModDB.app` and `dist/macos/MCDB-1.2.0-macos-universal.zip`, ad-hoc signed. Needs macOS 11 or later, so it runs on Sequoia 15.x.
 
-The **macOS build** GitHub Action runs the same script on a macOS runner for every `v*` tag or manual run and uploads `MCDB-macos` as an artifact; on a tag it also attaches the versioned `MCDB-…-macos-universal.zip` to that GitHub Release, so the download is public. The app is not notarized, so after downloading it once: right-click **ModDB.app** → **Open**, or run `xattr -dr com.apple.quarantine ModDB.app`.
+The **Release builds** GitHub Action builds the macOS app and the Windows installer on every `v*` tag or manual run, and uploads both as artifacts; on a tag it also attaches the versioned macOS zip and the Windows installer to that GitHub Release, so the downloads are public. The app is not notarized, so after downloading it once: right-click **ModDB.app** → **Open**, or run `xattr -dr com.apple.quarantine ModDB.app`.
 
 ## License
 

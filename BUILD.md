@@ -10,8 +10,8 @@ The version comes from `Cargo.toml`; the minimum macOS version is declared in
 | Platform | Command | Output |
 | --- | --- | --- |
 | Windows | `cargo build --release` | `target\release\ModDB.exe` |
-| Windows installer | `makensis installer.nsi` | `dist\MCDB-1.1-release-opensource.exe` |
-| macOS | `bash macos/build.sh` | `dist/macos/ModDB.app` + `dist/macos/MCDB-1.1.0-macos-universal.zip` |
+| Windows installer | `makensis installer.nsi` | `dist\MCDB-1.2-release-opensource.exe` |
+| macOS | `bash macos/build.sh` | `dist/macos/ModDB.app` + `dist/macos/MCDB-1.2.0-macos-universal.zip` |
 | Linux | `cargo build --release` | `target/release/ModDB` |
 
 The Python files (`db.py`, `providers.py`, `server.py`, `compat.py`) and the `static/`
@@ -218,16 +218,16 @@ API key (a default key is compiled in; you can override it in **Settings**).
 
 ## Building on GitHub (CI)
 
-`.github/workflows/macos.yml` builds the universal `.app` on a GitHub-hosted macOS
-Sequoia runner. It runs on manual dispatch and on `v*` tags, and uploads
-`MCDB-macos` (the zip) as a build artifact. On a `v*` tag it also creates that
-release if needed and attaches the zip, giving a public download link; manual runs only
-produce the artifact. There are no Windows or Linux CI jobs.
+`.github/workflows/release.yml` runs two builds: the universal `.app` on a GitHub-hosted
+macOS Sequoia runner and the NSIS installer on Windows. Both upload their output as
+artifacts on manual runs and on `v*` tags. On a tag, a third job waits for both, creates
+the release if it does not exist, and attaches the macOS `.zip` and the Windows `.exe`,
+so both downloads are public.
 
 This only works from a GitHub repository you can push to. The local `origin` currently
 points at `https://github.com/NeofastFTL-Dev/MCModDatabase.git`, and that URL is
-publicly readable (it answers with `main` and the `v1.0.0`/`v1.1.0` tags), so make
-sure it is the repository you actually want to use. If you are starting without a
+publicly readable (it answers with `main` and the `v1.0.0`/`v1.1.0`/`v1.2.0` tags), so
+make sure it is the repository you actually want to use. If you are starting without a
 repository, create one first.
 
 ### 1. Create the repository (skip if it already exists)
@@ -260,8 +260,8 @@ Only needed when the existing URL is not the repository you will push to. For SS
 ### 3. Commit and push the build changes
 
 ```bash
-git add .github/workflows/macos.yml BUILD.md README.md macos/build.sh macos/Info.plist src/update.rs src/gui.rs
-git commit -m "Build universal MCDB app for macOS"
+git add .github/workflows/release.yml BUILD.md README.md macos/build.sh macos/Info.plist installer.nsi Cargo.toml Cargo.lock src/update.rs src/gui.rs
+git commit -m "Release MCDB 1.2 with macOS and Windows builds"
 git push -u origin main
 ```
 
@@ -272,30 +272,32 @@ repository already has commits, run `git pull --rebase origin main` and push aga
 
 ### 4. Run the workflow
 
-GitHub → your repository → **Actions** → **macOS build** → **Run workflow** → branch
+GitHub → your repository → **Actions** → **Release builds** → **Run workflow** → branch
 `main`. The button only appears once the workflow file is on the default branch. If
 Actions is disabled, enable it under **Settings → Actions → General**.
 
 To publish a version instead, tag the commit you built and push the tag:
 
 ```bash
-git tag v1.1.1
-git push origin v1.1.1
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
-A `v*` tag runs the same build and then creates that GitHub Release (if it does not
-exist) and attaches the zip to it. The tag must point at a commit that contains the
-workflow, otherwise no run is queued.
+A `v*` tag runs both builds and then creates that GitHub Release (if it does not
+exist), titled `MCDB-<major.minor>-release-opensource` (for `v1.2.0`, that is
+`MCDB-1.2-release-opensource`), and attaches both files. The tag must point at a commit
+that contains the workflow, otherwise no run is queued.
 
 ### 5. Download the app
 
-The run takes roughly 5–10 minutes. Open the finished run and download the
-`MCDB-macos` artifact (kept for 30 days), then unzip it to find
-`MCDB-1.1.0-macos-universal.zip` and unzip that for `ModDB.app`.
+The run takes roughly 6–10 minutes, with the macOS and Windows jobs in parallel. Open
+the finished run and download `MCDB-macos` (the zip inside it is
+`MCDB-<version>-macos-universal.zip`) and `MCDB-windows` (the installer
+`MCDB-<major.minor>-release-opensource.exe`). Artifacts are kept for 30 days.
 
-Artifact downloads require being signed in to GitHub, so the artifact is not a public
-download link. Tag builds also attach the same zip to the release, which is the
-public link to share: `https://github.com/<owner>/<repo>/releases`.
+Artifact downloads require being signed in to GitHub, so artifacts are not public
+download links. Tag builds attach the same files to the release, which is the public
+link to share: `https://github.com/<owner>/<repo>/releases`.
 
 ## App data and settings
 

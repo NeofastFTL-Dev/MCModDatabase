@@ -1,0 +1,126 @@
+name: Release builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS universal app
+    # macos-15 is macOS Sequoia on Apple Silicon; the Intel slice cross-compiles from it.
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        run: |
+          rustup default stable
+          rustc --version
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            macos-
+
+      - name: Build app and zip
+        run: bash macos/build.sh
+
+      - name: Upload macOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCDB-macos
+          path: dist/macos/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        run: |
+          rustup default stable
+          rustc --version
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            windows-
+
+      - name: Build release exe
+        run: cargo build --release
+
+      - name: Build NSIS installer
+        shell: pwsh
+        run: |
+          $makensis = $null
+          $cmd = Get-Command makensis -ErrorAction SilentlyContinue
+          if ($cmd) { $makensis = $cmd.Source }
+          if (-not $makensis -and (Test-Path "C:\Program Files (x86)\NSIS\makensis.exe")) {
+            $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          }
+          if (-not $makensis) {
+            choco install nsis --no-progress -y
+            $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          }
+          if (-not (Test-Path $makensis)) { throw "makensis was not found" }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          & $makensis installer.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCDB-windows
+          path: dist/MCDB-*-release-opensource.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List assets
+        run: find artifacts -type f -printf '%p %s bytes\n'
+
+      - name: Create release and attach builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VER="${TAG#v}"
+          TITLE="MCDB-${VER%.*}-release-opensource"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TITLE" --generate-notes --verify-tag
+          fi
+          gh release upload "$TAG" artifacts/*/* --clobber
