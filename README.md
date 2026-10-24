@@ -77,7 +77,7 @@ macOS app bundle (universal, Apple Silicon + Intel):
 bash macos/build.sh
 ```
 
-Must run on a Mac (Apple clang and the SDK are required). Output: `dist/macos/ModDB.app` and `dist/macos/MCDB-1.1-macos-universal.zip`, ad-hoc signed. Needs macOS 11 or later, so it runs on Sequoia 15.x.
+Must run on a Mac (Apple clang and the SDK are required). Output: `dist/macos/ModDB.app` and `dist/macos/MCDB-1.1.0-macos-universal.zip`, ad-hoc signed. Needs macOS 11 or later, so it runs on Sequoia 15.x.
 
 The **macOS build** GitHub Action runs the same script on a macOS runner for every `v*` tag or manual run and uploads `MCDB-macos` as an artifact. The app is not notarized, so after downloading it once: right-click **ModDB.app** → **Open**, or run `xattr -dr com.apple.quarantine ModDB.app`.
 

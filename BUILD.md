@@ -11,7 +11,7 @@ The version comes from `Cargo.toml`; the minimum macOS version is declared in
 | --- | --- | --- |
 | Windows | `cargo build --release` | `target\release\ModDB.exe` |
 | Windows installer | `makensis installer.nsi` | `dist\MCDB-1.1-release-opensource.exe` |
-| macOS | `bash macos/build.sh` | `dist/macos/ModDB.app` + `dist/macos/MCDB-1.1-macos-universal.zip` |
+| macOS | `bash macos/build.sh` | `dist/macos/ModDB.app` + `dist/macos/MCDB-1.1.0-macos-universal.zip` |
 | Linux | `cargo build --release` | `target/release/ModDB` |
 
 The Python files (`db.py`, `providers.py`, `server.py`, `compat.py`) and the `static/`
@@ -280,7 +280,7 @@ tag also triggers a build.
 
 The run takes roughly 5–10 minutes. Open the finished run and download the
 `MCDB-macos` artifact (kept for 30 days), then unzip it to find
-`MCDB-1.1-macos-universal.zip` and unzip that for `ModDB.app`.
+`MCDB-1.1.0-macos-universal.zip` and unzip that for `ModDB.app`.
 
 Artifact downloads require being signed in to GitHub, so this is not a public download
 link. Attaching the zip to a Release is a separate step that the workflow does not do.
