@@ -1,0 +1,46 @@
+name: macOS build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: Universal app bundle
+    # macos-15 is macOS Sequoia on Apple Silicon; the Intel slice cross-compiles from it.
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        run: |
+          rustup default stable
+          rustc --version
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            macos-
+
+      - name: Build app and zip
+        run: bash macos/build.sh
+
+      - name: Upload MCDB for macOS
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCDB-macos
+          path: dist/macos/*.zip
+          if-no-files-found: error
+          retention-days: 30

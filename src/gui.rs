@@ -571,13 +571,22 @@ let ptype = self.project_type.clone();
                     self.status = s;
                 }
                 Msg::UpdateReady(path) => {
-                    self.status = "Installing update… MCDB will restart.".into();
-                    let ctx = self.ctx.clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(Duration::from_millis(600));
+                    if cfg!(target_os = "macos") {
+                        // A macOS update is a zipped app: reveal it and let the user swap it in.
+                        self.updating = false;
+                        self.status =
+                            "Update downloaded. Unzip it, quit MCDB, then drag ModDB into Applications."
+                                .into();
                         let _ = update::launch_installer(&path);
-                    });
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    } else {
+                        self.status = "Installing update… MCDB will restart.".into();
+                        std::thread::spawn(move || {
+                            std::thread::sleep(Duration::from_millis(600));
+                            let _ = update::launch_installer(&path);
+                        });
+                        self.ctx
+                            .send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
                 }
                 Msg::PackDone(plan) => {
                     self.loading = false;
@@ -1434,7 +1443,7 @@ let ptype = self.project_type.clone();
         if let Some(rel) = &self.update {
             ui.add_space(8.0);
             ui.label(RichText::new(format!("A new build is waiting: {}", rel.tag)).color(PINK));
-            if ui.button("Download, install, restart").clicked() {
+            if ui.button(update_action_label()).clicked() {
                 self.start_app_update();
             }
         } else {
@@ -1497,7 +1506,7 @@ let ptype = self.project_type.clone();
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     if ui
-                        .add_enabled(!busy, egui::Button::new("Download, install, restart"))
+                        .add_enabled(!busy, egui::Button::new(update_action_label()))
                         .clicked()
                     {
                         go = true;
@@ -1512,7 +1521,11 @@ let ptype = self.project_type.clone();
                 if busy {
                     ui.horizontal(|ui| {
                         ui.spinner();
-                        ui.label("Fetching the installer… then I'll close so it can replace me.");
+                        ui.label(if cfg!(target_os = "macos") {
+                            "Fetching the update… then I'll open it in Finder."
+                        } else {
+                            "Fetching the installer… then I'll close so it can replace me."
+                        });
                     });
                 }
             });
@@ -1527,6 +1540,14 @@ let ptype = self.project_type.clone();
         if close {
             self.update_open = false;
         }
+    }
+}
+
+fn update_action_label() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Download update"
+    } else {
+        "Download, install, restart"
     }
 }
 

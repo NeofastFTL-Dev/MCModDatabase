@@ -57,6 +57,8 @@ Select several mods, then **Download to folder** or **Save zip**. MCDB resolves 
 
 ## Build from source
 
+Prerequisites, packaging, and toolchain troubleshooting per platform: [BUILD.md](BUILD.md).
+
 ```bat
 cargo build --release
 ```
@@ -69,7 +71,15 @@ makensis installer.nsi
 
 Output: `dist\MCDB-1.1-release-opensource.exe`
 
-macOS app bundle: `macos/build.sh` (must run on a Mac).
+macOS app bundle (universal, Apple Silicon + Intel):
+
+```bash
+bash macos/build.sh
+```
+
+Must run on a Mac (Apple clang and the SDK are required). Output: `dist/macos/ModDB.app` and `dist/macos/MCDB-1.1-macos-universal.zip`, ad-hoc signed. Needs macOS 11 or later, so it runs on Sequoia 15.x.
+
+The **macOS build** GitHub Action runs the same script on a macOS runner for every `v*` tag or manual run and uploads `MCDB-macos` as an artifact. The app is not notarized, so after downloading it once: right-click **ModDB.app** → **Open**, or run `xattr -dr com.apple.quarantine ModDB.app`.
 
 ## License
 

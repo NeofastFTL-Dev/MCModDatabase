@@ -62,15 +62,14 @@ pub fn latest() -> Result<Option<Release>> {
     for a in &assets {
         let name = js(&a["name"]);
         let url = js(&a["browser_download_url"]);
-        if name.to_ascii_lowercase().ends_with(".exe") && !url.is_empty() {
-            let score = name.to_ascii_lowercase().contains("opensource")
-                || name.to_ascii_lowercase().contains("setup")
-                || name.to_ascii_lowercase().contains("install");
-            if score || pick.is_none() {
-                pick = Some((name, url));
-                if score {
-                    break;
-                }
+        if url.is_empty() || !asset_matches_platform(&name) {
+            continue;
+        }
+        if asset_preferred(&name) || pick.is_none() {
+            let preferred = asset_preferred(&name);
+            pick = Some((name, url));
+            if preferred {
+                break;
             }
         }
     }
@@ -97,9 +96,35 @@ pub fn latest() -> Result<Option<Release>> {
     }))
 }
 
+fn asset_matches_platform(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    if cfg!(windows) {
+        lower.ends_with(".exe")
+    } else if cfg!(target_os = "macos") {
+        lower.contains("macos") && (lower.ends_with(".zip") || lower.ends_with(".dmg"))
+    } else {
+        lower.ends_with(".tar.gz") || lower.ends_with(".appimage")
+    }
+}
+
+fn asset_preferred(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.contains("opensource")
+        || lower.contains("setup")
+        || lower.contains("install")
+        || lower.contains("universal")
+}
+
 pub fn download_installer(rel: &Release) -> Result<std::path::PathBuf> {
+    let fallback = if cfg!(windows) {
+        "MCDB-update.exe"
+    } else if cfg!(target_os = "macos") {
+        "MCDB-update.zip"
+    } else {
+        "MCDB-update.tar.gz"
+    };
     let dest = std::env::temp_dir().join(if rel.asset_name.is_empty() {
-        "MCDB-update.exe".into()
+        fallback.into()
     } else {
         crate::util::sanitize_component(&rel.asset_name)
     });
@@ -108,7 +133,15 @@ pub fn download_installer(rel: &Release) -> Result<std::path::PathBuf> {
 }
 
 pub fn launch_installer(path: &std::path::Path) -> Result<()> {
-    std::process::Command::new(path).spawn()?;
+    #[cfg(target_os = "macos")]
+    {
+        // The macOS update is an app zip, not an executable: hand it to Finder.
+        std::process::Command::new("open").arg(path).spawn()?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::process::Command::new(path).spawn()?;
+    }
     Ok(())
 }
 
