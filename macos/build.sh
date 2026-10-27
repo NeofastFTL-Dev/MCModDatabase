@@ -82,12 +82,23 @@ elif [ -f "$PNG" ]; then
 fi
 
 # Apple Silicon refuses to launch unsigned code; ad-hoc signing keeps local/direct downloads working.
+# Full Gatekeeper silence needs an Apple Developer ID + notarization (not done here).
 codesign --force --deep --sign - "$APP" >/dev/null
 codesign --verify --deep --strict "$APP"
 
+# Stage zip contents: top-level folder with app + one-click quarantine helper + short readme.
+STAGE="$OUT/MCDB-$VERSION-macos-$SUFFIX"
+rm -rf "$STAGE"
+mkdir -p "$STAGE"
+ditto "$APP" "$STAGE/ModDB.app"
+cp "$ROOT/macos/Open ModDB.command" "$STAGE/Open ModDB.command"
+chmod +x "$STAGE/Open ModDB.command"
+cp "$ROOT/macos/README-macOS.txt" "$STAGE/README-macOS.txt"
+
 ZIP="$OUT/MCDB-$VERSION-macos-$SUFFIX.zip"
 rm -f "$ZIP"
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+ditto -c -k --sequesterRsrc --keepParent "$STAGE" "$ZIP"
+rm -rf "$STAGE"
 
 echo "$APP"
 echo "$ZIP"

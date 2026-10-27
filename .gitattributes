@@ -1,0 +1,3 @@
+﻿macos/*.command text eol=lf
+macos/*.sh text eol=lf
+macos/README-macOS.txt text eol=lf

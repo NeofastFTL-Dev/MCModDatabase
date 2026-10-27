@@ -11,7 +11,7 @@ The version comes from `Cargo.toml`; the minimum macOS version is declared in
 | --- | --- | --- |
 | Windows | `cargo build --release` | `target\release\ModDB.exe` |
 | Windows installer | `makensis installer.nsi` | `dist\MCDB-1.2-release-opensource.exe` |
-| macOS | `bash macos/build.sh` | `dist/macos/ModDB.app` + `dist/macos/MCDB-1.2.0-macos-universal.zip` |
+| macOS | `bash macos/build.sh` | `dist/macos/ModDB.app` + `dist/macos/MCDB-1.2.1-macos-universal.zip` |
 | Linux | `cargo build --release` | `target/release/ModDB` |
 
 The Python files (`db.py`, `providers.py`, `server.py`, `compat.py`) and the `static/`
@@ -96,7 +96,9 @@ What the script does:
 4. Copies `macos/Info.plist`, stamps `CFBundleShortVersionString`/`CFBundleVersion`
    from `Cargo.toml`, and builds `icon.icns` from `assets/icon.png`.
 5. Ad-hoc signs the bundle (`codesign --force --deep --sign -`) and verifies it.
-6. Zips the app with `ditto`, preserving it correctly for distribution.
+6. Stages a folder `MCDB-<ver>-macos-<suffix>/` with `ModDB.app`, `Open ModDB.command`
+   (clears quarantine on first launch), and `README-macOS.txt`, then zips that folder with
+   `ditto`.
 
 Set `UNIVERSAL=0` to build only the current Mac's architecture, which halves the build
 time:
@@ -112,12 +114,16 @@ open dist/macos/ModDB.app
 ditto dist/macos/ModDB.app /Applications/ModDB.app
 ```
 
-A locally built app is not quarantined, so it launches normally. If you copy the zip to
-another Mac, the app is ad-hoc signed but not notarized: right-click → **Open** the
-first time, or run `xattr -dr com.apple.quarantine /Applications/ModDB.app`.
+A locally built app is not quarantined, so it launches normally. The release zip includes
+**Open ModDB.command** next to `ModDB.app`: double-click that helper the first time on
+another Mac to clear quarantine and launch. Alternatives on Sequoia: **Open Anyway** on
+the Gatekeeper dialog, or System Settings → Privacy & Security → Open Anyway if you
+clicked Done; or right-click → **Open**; or
+`xattr -dr com.apple.quarantine /Applications/ModDB.app`.
 
-Shipping it broadly without Gatekeeper warnings needs an Apple Developer ID
-certificate and notarization, which this project does not currently do.
+The helper is bundled by `macos/build.sh`. Shipping without any Gatekeeper prompt still
+needs an Apple Developer ID certificate and notarization, which this project does not
+currently do.
 
 ### Checking the bundle
 
@@ -192,8 +198,8 @@ API key (a default key is compiled in; you can override it in **Settings**).
 | `./macos/build.sh: Permission denied` | The executable bit is not tracked by Git. Use `bash macos/build.sh`. |
 | `rustup: command not found` | Rust came from Homebrew. Install rustup; `build.sh` needs `rustup target add`. |
 | `codesign` fails with `resource fork, Finder information, or similar detritus not allowed` | Extended attributes on the bundle. `xattr -cr dist/macos/ModDB.app`, then rerun the script. |
-| "cannot be opened because the developer cannot be verified" | Ad-hoc signature and quarantine on a downloaded copy: right-click → Open, or `xattr -dr com.apple.quarantine ModDB.app`. |
-| "is damaged and can't be opened" | Same quarantine issue on an unnotarized app; the command above fixes it. A locally built copy is unaffected. |
+| "cannot be opened because the developer cannot be verified" / Sequoia "Apple could not verify" | Ad-hoc signature and quarantine: double-click **Open ModDB.command** from the zip, or Sequoia **Open Anyway** / Privacy & Security → Open Anyway, or right-click → Open, or `xattr -dr com.apple.quarantine ModDB.app`. |
+| "is damaged and can't be opened" | Same quarantine issue on an unnotarized app; use **Open ModDB.command** or the `xattr` command above. A locally built copy is unaffected. |
 | `error: unrecognized command-line option '-arch'` while targeting Apple from Windows/Linux | Cross-compiling is not supported. Build on a Mac or use the macOS CI workflow. |
 
 ### Linux
@@ -226,7 +232,7 @@ so both downloads are public.
 
 This only works from a GitHub repository you can push to. The local `origin` currently
 points at `https://github.com/NeofastFTL-Dev/MCModDatabase.git`, and that URL is
-publicly readable (it answers with `main` and the `v1.0.0`/`v1.1.0`/`v1.2.0` tags), so
+publicly readable (it answers with `main` and the `v1.0.0`/`v1.1.0`/`v1.2.0`/`v1.2.1` tags), so
 make sure it is the repository you actually want to use. If you are starting without a
 repository, create one first.
 
@@ -279,12 +285,12 @@ Actions is disabled, enable it under **Settings → Actions → General**.
 To publish a version instead, tag the commit you built and push the tag:
 
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
+git tag v1.2.1
+git push origin v1.2.1
 ```
 
 A `v*` tag runs both builds and then creates that GitHub Release (if it does not
-exist), titled `MCDB-<major.minor>-release-opensource` (for `v1.2.0`, that is
+exist), titled `MCDB-<major.minor>-release-opensource` (for `v1.2.1`, that is
 `MCDB-1.2-release-opensource`), and attaches both files. The tag must point at a commit
 that contains the workflow, otherwise no run is queued.
 

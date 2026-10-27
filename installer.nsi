@@ -26,7 +26,7 @@ Section "Install"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MCDB" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MCDB" "DisplayIcon" "$INSTDIR\ModDB.exe"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MCDB" "Publisher" "NeofastFTL"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MCDB" "DisplayVersion" "1.2.0"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MCDB" "DisplayVersion" "1.2.1"
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MCDB" "NoModify" 1
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MCDB" "NoRepair" 1
 SectionEnd

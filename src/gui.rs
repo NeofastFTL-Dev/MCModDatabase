@@ -572,20 +572,34 @@ let ptype = self.project_type.clone();
                 }
                 Msg::UpdateReady(path) => {
                     if cfg!(target_os = "macos") {
-                        // A macOS update is a zipped app: reveal it and let the user swap it in.
+                        // macOS update is a zip: open in Finder; user runs Open ModDB.command.
                         self.updating = false;
-                        self.status =
-                            "Update downloaded. Unzip it, quit MCDB, then drag ModDB into Applications."
-                                .into();
-                        let _ = update::launch_installer(&path);
+                        match update::launch_installer(&path) {
+                            Ok(()) => {
+                                self.status = "Update downloaded and opened in Finder. Unzip, quit MCDB, then double-click Open ModDB.command (or drag ModDB.app into Applications).".into();
+                            }
+                            Err(e) => {
+                                self.status = format!(
+                                    "Update saved to {} but couldn't open Finder: {e}",
+                                    path.display()
+                                );
+                            }
+                        }
                     } else {
-                        self.status = "Installing update… MCDB will restart.".into();
-                        std::thread::spawn(move || {
-                            std::thread::sleep(Duration::from_millis(600));
-                            let _ = update::launch_installer(&path);
-                        });
-                        self.ctx
-                            .send_viewport_cmd(egui::ViewportCommand::Close);
+                        // Spawn the NSIS installer first (detached), THEN quit so
+                        // ModDB.exe unlocks. Never sleep-then-spawn on a thread that
+                        // dies with the process — that was why Install and Restart did nothing.
+                        match update::launch_installer(&path) {
+                            Ok(()) => {
+                                self.status = "Installing update… MCDB will close so the installer can replace it.".into();
+                                self.ctx
+                                    .send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                            Err(e) => {
+                                self.updating = false;
+                                self.status = format!("Could not start installer: {e}");
+                            }
+                        }
                     }
                 }
                 Msg::PackDone(plan) => {

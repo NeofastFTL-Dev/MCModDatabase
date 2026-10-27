@@ -132,17 +132,50 @@ pub fn download_installer(rel: &Release) -> Result<std::path::PathBuf> {
     Ok(dest)
 }
 
+/// Start the downloaded installer/update package.
+///
+/// On Windows the NSIS installer is spawned detached so it survives when MCDB
+/// exits (needed so ModDB.exe can be overwritten). Call this *before* closing
+/// the app — do not sleep-then-spawn on a background thread that dies with quit.
 pub fn launch_installer(path: &std::path::Path) -> Result<()> {
+    if !path.exists() {
+        return Err(anyhow!("update file missing: {}", path.display()));
+    }
+
     #[cfg(target_os = "macos")]
     {
-        // The macOS update is an app zip, not an executable: hand it to Finder.
-        std::process::Command::new("open").arg(path).spawn()?;
+        // macOS release is a zip: open it in Finder so the user can run
+        // Open ModDB.command / replace the app.
+        std::process::Command::new("open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| anyhow!("open update zip: {e}"))?;
+        Ok(())
     }
-    #[cfg(not(target_os = "macos"))]
+
+    #[cfg(windows)]
     {
-        std::process::Command::new(path).spawn()?;
+        use std::os::windows::process::CommandExt;
+        // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP — child outlives us.
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        let mut cmd = std::process::Command::new(path);
+        if let Some(dir) = path.parent() {
+            cmd.current_dir(dir);
+        }
+        cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+        cmd.spawn()
+            .map_err(|e| anyhow!("start installer {}: {e}", path.display()))?;
+        Ok(())
     }
-    Ok(())
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        std::process::Command::new(path)
+            .spawn()
+            .map_err(|e| anyhow!("start update: {e}"))?;
+        Ok(())
+    }
 }
 
 fn js(v: &Value) -> String {
