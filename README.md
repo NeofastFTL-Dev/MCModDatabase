@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/NeofastFTL-Dev/MCModDatabase/releases/tag/v1.2.1"><img src="https://img.shields.io/badge/download-MCDB--1.2--release--opensource-3ee0a0?style=for-the-badge" alt="Download"></a>
+  <a href="https://github.com/NeofastFTL-Dev/MCModDatabase/releases/tag/v1.2.2"><img src="https://img.shields.io/badge/download-MCDB--1.2.2--release--opensource-3ee0a0?style=for-the-badge" alt="Download"></a>
   <img src="https://img.shields.io/badge/license-MIT-informational?style=for-the-badge" alt="MIT">
 </p>
 
@@ -45,12 +45,12 @@ Select several mods, then **Download to folder** or **Save zip**. MCDB resolves 
 
 **Windows**
 
-1. Grab [**MCDB-1.2-release-opensource.exe**](https://github.com/NeofastFTL-Dev/MCModDatabase/releases/tag/v1.2.1)
+1. Grab [**MCDB-1.2.2-release-opensource.exe**](https://github.com/NeofastFTL-Dev/MCModDatabase/releases/tag/v1.2.2)
 2. Run the installer (installs to `Program Files\MCDB` and adds Start Menu + desktop shortcuts)
 
 **macOS** (Apple Silicon + Intel, macOS 11 or later)
 
-1. Grab **MCDB-1.2.1-macos-universal.zip** from the same release
+1. Grab **MCDB-1.2.2-macos-universal.zip** from the same release
 2. Unzip the folder (contains `ModDB.app`, `Open ModDB.command`, and `README-macOS.txt`)
 3. First launch: double-click **Open ModDB.command** (clears Gatekeeper quarantine and opens the app). macOS may ask once to allow Terminal/bash — choose Allow / Open.
 4. Optional alternatives: right-click **ModDB.app** → **Open**, or on Sequoia use **Open Anyway** on the Gatekeeper dialog (or System Settings → Privacy & Security → Open Anyway if you clicked Done)
@@ -80,7 +80,7 @@ Windows installer:
 makensis installer.nsi
 ```
 
-Output: `dist\MCDB-1.2-release-opensource.exe`
+Output: `dist\MCDB-1.2.2-release-opensource.exe`
 
 macOS app bundle (universal, Apple Silicon + Intel):
 
@@ -88,9 +88,13 @@ macOS app bundle (universal, Apple Silicon + Intel):
 bash macos/build.sh
 ```
 
-Must run on a Mac (Apple clang and the SDK are required). Output: `dist/macos/ModDB.app` and `dist/macos/MCDB-1.2.1-macos-universal.zip`, ad-hoc signed. Needs macOS 11 or later, so it runs on Sequoia 15.x.
+Must run on a Mac (Apple clang and the SDK are required). Output: `dist/macos/ModDB.app` and `dist/macos/MCDB-1.2.2-macos-universal.zip`, ad-hoc signed. Needs macOS 11 or later, so it runs on Sequoia 15.x.
 
 The **Release builds** GitHub Action builds the macOS app and the Windows installer on every `v*` tag or manual run, and uploads both as artifacts; on a tag it also attaches the versioned macOS zip and the Windows installer to that GitHub Release, so the downloads are public. The zip includes **Open ModDB.command**, which clears quarantine on first launch. The app is ad-hoc signed, not notarized — double-click that helper the first time, or use Sequoia's **Open Anyway** / Privacy & Security → Open Anyway. A silent Gatekeeper pass still needs an Apple Developer ID and notarization.
+
+## Support
+
+If MCDB helps you, a [GitHub star](https://github.com/NeofastFTL-Dev/MCModDatabase) or a tip on [Ko-fi](https://ko-fi.com/emilliftl) is appreciated.
 
 ## License
 

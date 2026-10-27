@@ -128,7 +128,16 @@ pub fn download_installer(rel: &Release) -> Result<std::path::PathBuf> {
     } else {
         crate::util::sanitize_component(&rel.asset_name)
     });
-    download_file(&rel.download_url, &[], &dest, |_, _| {})?;
+    let n = download_file(&rel.download_url, &[], &dest, |_, _| {})?;
+    if n == 0 || !dest.exists() {
+        let _ = std::fs::remove_file(&dest);
+        return Err(anyhow!("downloaded update was empty"));
+    }
+    let meta = std::fs::metadata(&dest)?;
+    if meta.len() == 0 {
+        let _ = std::fs::remove_file(&dest);
+        return Err(anyhow!("downloaded update was empty"));
+    }
     Ok(dest)
 }
 
@@ -138,8 +147,15 @@ pub fn download_installer(rel: &Release) -> Result<std::path::PathBuf> {
 /// exits (needed so ModDB.exe can be overwritten). Call this *before* closing
 /// the app — do not sleep-then-spawn on a background thread that dies with quit.
 pub fn launch_installer(path: &std::path::Path) -> Result<()> {
+    if path.as_os_str().is_empty() {
+        return Err(anyhow!("update path is empty"));
+    }
     if !path.exists() {
         return Err(anyhow!("update file missing: {}", path.display()));
+    }
+    let meta = std::fs::metadata(path)?;
+    if meta.len() == 0 {
+        return Err(anyhow!("update file is empty: {}", path.display()));
     }
 
     #[cfg(target_os = "macos")]

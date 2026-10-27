@@ -36,10 +36,22 @@ pub fn get_json(url: &str, extra: &[(&str, &str)]) -> Result<serde_json::Value> 
     for (k, v) in extra {
         req = req.set(k, v);
     }
-    req.call()
-        .map_err(|e| anyhow!("{}", describe_err(e)))?
-        .into_json()
-        .context("json")
+    let resp = req.call().map_err(|e| anyhow!("{}", describe_err(e)))?;
+    let mut reader = resp.into_reader();
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 64 * 1024];
+    let max = 32 * 1024 * 1024;
+    loop {
+        let n = reader.read(&mut chunk).context("read json")?;
+        if n == 0 {
+            break;
+        }
+        if buf.len().saturating_add(n) > max {
+            return Err(anyhow!("json too large"));
+        }
+        buf.extend_from_slice(&chunk[..n]);
+    }
+    serde_json::from_slice(&buf).context("json")
 }
 
 pub fn download_to<W: Write>(

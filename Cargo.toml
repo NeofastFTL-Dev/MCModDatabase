@@ -1,6 +1,6 @@
 [package]
 name = "mc-mod-database"
-version = "1.2.1"
+version = "1.2.2"
 edition = "2021"
 description = "ModDB - search CurseForge and Modrinth mods"
 license = "MIT"

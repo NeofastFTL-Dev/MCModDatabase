@@ -16,7 +16,7 @@ pub fn sanitize_component(s: &str) -> String {
         out.pop();
     }
     out = out.trim_start().to_string();
-    if out.is_empty() {
+    if out.is_empty() || out == "." || out == ".." {
         return "_".to_string();
     }
     out

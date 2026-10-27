@@ -288,10 +288,21 @@ impl App {
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
         std::thread::spawn(move || {
-            if let Ok(Some(rel)) = update::latest() {
-                let _ = tx.send(Msg::UpdateAvailable(rel));
-                ctx.request_repaint();
+            match update::latest() {
+                Ok(Some(rel)) => {
+                    let _ = tx.send(Msg::UpdateAvailable(rel));
+                }
+                Ok(None) => {
+                    let _ = tx.send(Msg::UpdateProgress(format!(
+                        "You're on the latest build ({})",
+                        update::current()
+                    )));
+                }
+                Err(e) => {
+                    let _ = tx.send(Msg::UpdateFailed(format!("Update check failed: {e}")));
+                }
             }
+            ctx.request_repaint();
         });
     }
 
@@ -1450,10 +1461,13 @@ let ptype = self.project_type.clone();
             if ui.button("Releases").clicked() {
                 util::open_url("https://github.com/NeofastFTL-Dev/MCModDatabase/releases");
             }
+            if ui.button("Ko-fi").clicked() {
+                util::open_url("https://ko-fi.com/emilliftl");
+            }
         });
         ui.add_space(16.0);
         ui.heading(RichText::new("Support").color(SKY));
-        ui.label("Stars, issues, and kind notes keep this project alive. No pressure, just vibes.");
+        ui.label("Stars, issues, kind notes, or a tip on Ko-fi keep this project alive. No pressure, just vibes.");
         if let Some(rel) = &self.update {
             ui.add_space(8.0);
             ui.label(RichText::new(format!("A new build is waiting: {}", rel.tag)).color(PINK));
