@@ -34,6 +34,7 @@ enum View {
     Library,
     Saved,
     Settings,
+    Agents,
     Support,
     Pack,
 }
@@ -112,6 +113,10 @@ pub struct App {
     pack: Option<PackReport>,
     status: String,
     cf_key_edit: String,
+    agent_port_edit: String,
+    agent_show_key: bool,
+    agent_server: Option<crate::agent::ServerHandle>,
+    agent_note: String,
     focus: Option<String>,
     prompt_note: String,
     search_gen: u64,
@@ -197,6 +202,7 @@ impl App {
         let (index_tx, index_rx) = mpsc::channel();
         let settings = Settings::load();
         let cf_key_edit = settings.curseforge_key.clone();
+        let agent_port_edit = settings.agent_port.to_string();
         let catalog_stats = catalog::stats();
         let catalog_themes = catalog::theme_counts();
         let should_index = catalog::should_auto_index();
@@ -225,6 +231,10 @@ impl App {
             pack: None,
             status: "Ready".into(),
             cf_key_edit,
+            agent_port_edit,
+            agent_show_key: false,
+            agent_server: None,
+            agent_note: String::new(),
             focus: None,
             prompt_note: String::new(),
             search_gen: 0,
@@ -646,7 +656,7 @@ let ptype = self.project_type.clone();
             }
         }
         if let Some(t) = self.last_edit {
-            if t.elapsed() >= DEBOUNCE && self.view != View::Settings && self.view != View::Support && self.view != View::Pack {
+            if t.elapsed() >= DEBOUNCE && self.view != View::Settings && self.view != View::Agents && self.view != View::Support && self.view != View::Pack {
                 let plan = prompt::parse(&self.query);
                 self.prompt_note = prompt::summary(&plan);
                 if self.loading {
@@ -695,6 +705,7 @@ let ptype = self.project_type.clone();
             (View::Library, "Library"),
             (View::Saved, "Saved"),
             (View::Settings, "Settings"),
+            (View::Agents, "Agents"),
             (View::Support, "Support ♡"),
             (View::Pack, "Pack"),
         ] {
@@ -705,7 +716,7 @@ let ptype = self.project_type.clone();
                 self.view = view;
                 if view == View::Catalog {
                     self.load_catalog_hits();
-                } else if view != View::Settings && view != View::Support && view != View::Pack {
+                } else if view != View::Settings && view != View::Agents && view != View::Support && view != View::Pack {
                     self.last_edit = Some(Instant::now());
                 }
             }
@@ -1282,6 +1293,169 @@ let ptype = self.project_type.clone();
         });
     }
 
+
+    fn agents_panel(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Agents");
+        ui.label(
+            RichText::new(
+                "Connect AI tools (Grok, Claude, ChatGPT, Freebuff, Cursor, etc.) to this local ModDB catalog.",
+            )
+            .color(DIM),
+        );
+        ui.add_space(10.0);
+
+        let running = self.agent_server.as_ref().is_some_and(|s| s.is_alive());
+        let port = self
+            .agent_port_edit
+            .parse::<u16>()
+            .unwrap_or(self.settings.agent_port)
+            .max(1);
+        let base = format!("http://127.0.0.1:{port}");
+
+        ui.heading("Local API");
+        ui.label(format!("Base URL: {base}"));
+        ui.horizontal(|ui| {
+            ui.label("Port");
+            ui.add(
+                egui::TextEdit::singleline(&mut self.agent_port_edit)
+                    .desired_width(80.0)
+                    .hint_text("8765"),
+            );
+            if ui.button("Save port").clicked() {
+                if let Ok(p) = self.agent_port_edit.parse::<u16>() {
+                    if p > 0 {
+                        self.settings.agent_port = p;
+                        self.settings.save();
+                        self.agent_note = format!("Port saved: {p}");
+                    }
+                } else {
+                    self.agent_note = "Invalid port".into();
+                }
+            }
+        });
+
+        ui.add_space(6.0);
+        ui.label("API key (Authorization: Bearer <key>)");
+        ui.horizontal(|ui| {
+            let mut display = if self.agent_show_key {
+                self.settings.agent_api_key.clone()
+            } else if self.settings.agent_api_key.is_empty() {
+                String::new()
+            } else {
+                "••••••••••••••••••••••••".into()
+            };
+            let edit = egui::TextEdit::singleline(&mut display)
+                .desired_width(320.0)
+                .interactive(self.agent_show_key);
+            ui.add(edit);
+            if ui
+                .button(if self.agent_show_key { "Hide" } else { "Show" })
+                .clicked()
+            {
+                self.agent_show_key = !self.agent_show_key;
+            }
+            if ui.button("Copy").clicked() {
+                if self.settings.agent_api_key.is_empty() {
+                    self.agent_note = "Generate a key first".into();
+                } else {
+                    ui.ctx().copy_text(self.settings.agent_api_key.clone());
+                    self.agent_note = "API key copied".into();
+                }
+            }
+        });
+        ui.horizontal(|ui| {
+            if ui.button("Generate key").clicked() {
+                self.settings.agent_api_key = crate::agent::generate_api_key();
+                self.settings.save();
+                self.agent_show_key = true;
+                ui.ctx().copy_text(self.settings.agent_api_key.clone());
+                self.agent_note = "New API key generated and copied".into();
+            }
+            if ui.button("Regenerate").clicked() {
+                self.settings.agent_api_key = crate::agent::generate_api_key();
+                self.settings.save();
+                self.agent_show_key = true;
+                ui.ctx().copy_text(self.settings.agent_api_key.clone());
+                self.agent_note = "API key regenerated — update your AI tool config".into();
+            }
+            if ui.button("Clear key").clicked() {
+                self.settings.agent_api_key.clear();
+                self.settings.save();
+                self.agent_note = "API key cleared".into();
+            }
+        });
+
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            if running {
+                ui.label(RichText::new(format!("API running on {base}")).color(ACCENT));
+                if ui.button("Stop").clicked() {
+                    if let Some(h) = self.agent_server.take() {
+                        h.stop();
+                    }
+                    self.agent_note = "Agent API stopped".into();
+                }
+            } else if ui.button("Start local API").clicked() {
+                let key = crate::agent::ensure_api_key(&mut self.settings);
+                self.settings.agent_port = port;
+                self.settings.save();
+                self.agent_port_edit = port.to_string();
+                match crate::agent::start_background(port, key) {
+                    Ok(h) => {
+                        self.agent_server = Some(h);
+                        self.agent_note = format!("Agent API started at {base}");
+                    }
+                    Err(e) => {
+                        self.agent_note = format!("Failed to start: {e}");
+                    }
+                }
+            }
+        });
+        if !self.agent_note.is_empty() {
+            ui.label(RichText::new(&self.agent_note).color(SKY));
+        }
+
+        ui.add_space(14.0);
+        ui.heading("How to connect");
+        ui.label("1. Click Start local API (or run: ModDB.exe agent serve)");
+        ui.label("2. Generate an API key and copy it");
+        ui.label("3. Point your AI tool at the base URL with the Bearer token");
+        ui.add_space(6.0);
+        ui.label(RichText::new("Works out of the box when the tool can call a local HTTP API:").strong());
+        ui.label("• Cursor / Grok Bot / Claude Code / Codex-style agents — HTTP fetch or shell");
+        ui.label("• Freebuff / custom MCP wrappers — set base URL + Authorization header");
+        ui.label(RichText::new("Needs the tool to call this machine (no cloud marketplace plugin yet):").strong());
+        ui.label("• ChatGPT / Claude web apps — use a bridge, Desktop app with local tools, or paste CLI output");
+        ui.add_space(6.0);
+        ui.label(RichText::new("Example curl").small().color(DIM));
+        let curl = format!(
+            "curl -s -H \"Authorization: Bearer YOUR_KEY\" \"{base}/search?q=sodium&limit=5\""
+        );
+        ui.monospace(&curl);
+        if ui.button("Copy curl example").clicked() {
+            let key = if self.settings.agent_api_key.is_empty() {
+                "YOUR_KEY"
+            } else {
+                self.settings.agent_api_key.as_str()
+            };
+            ui.ctx().copy_text(format!(
+                "curl -s -H \"Authorization: Bearer {key}\" \"{base}/search?q=sodium&limit=5\""
+            ));
+            self.agent_note = "curl example copied".into();
+        }
+        ui.add_space(6.0);
+        ui.label(RichText::new("CLI (no server needed)").small().color(DIM));
+        ui.monospace("ModDB.exe agent search \"sodium\" --json");
+        ui.monospace("ModDB.exe agent get modrinth AANobbMI --json");
+        ui.monospace("ModDB.exe agent library --json");
+        ui.monospace("ModDB.exe agent status --json");
+        ui.add_space(6.0);
+        ui.label(RichText::new("Endpoints").small().color(DIM));
+        ui.label("GET /health  (no auth)");
+        ui.label("GET /status  GET /search?q=  GET /library  GET /mods/{source}/{id}");
+        ui.label(RichText::new("Full write-up: AGENTS.md in the repo / install folder.").small().color(DIM));
+    }
+
     fn settings_panel(&mut self, ui: &mut egui::Ui) {
         ui.heading("Settings");
         ui.label("Modrinth is public. CurseForge needs an API key from console.curseforge.com");
@@ -1609,6 +1783,7 @@ impl eframe::App for App {
                     if self.view != View::Library
                         && self.view != View::Saved
                         && self.view != View::Settings
+                        && self.view != View::Agents
                         && self.view != View::Support
                         && self.view != View::Pack
                     {
@@ -1637,6 +1812,10 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.view == View::Settings {
                 self.settings_panel(ui);
+                return;
+            }
+            if self.view == View::Agents {
+                self.agents_panel(ui);
                 return;
             }
             if self.view == View::Support {

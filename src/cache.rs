@@ -119,4 +119,14 @@ impl Library {
         let cf = self.mods.values().filter(|m| m.source == "curseforge").count();
         (self.mods.len(), mr, cf, self.favorites.len())
     }
+    pub fn list_all(&self) -> Vec<(ModHit, bool)> {
+        let mut out: Vec<(ModHit, bool)> = self
+            .mods
+            .values()
+            .map(|m| (m.clone(), self.favorites.contains(&key(m))))
+            .collect();
+        out.sort_by(|a, b| b.0.downloads.cmp(&a.0.downloads));
+        out
+    }
+
 }

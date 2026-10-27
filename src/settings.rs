@@ -8,6 +8,8 @@ pub struct Settings {
     pub download_dir: PathBuf,
     pub curseforge_key: String,
     pub skip_update: String,
+    pub agent_api_key: String,
+    pub agent_port: u16,
 }
 
 impl Default for Settings {
@@ -16,6 +18,8 @@ impl Default for Settings {
             download_dir: crate::util::default_download_dir(),
             curseforge_key: DEFAULT_CURSEFORGE_KEY.to_string(),
             skip_update: String::new(),
+            agent_api_key: String::new(),
+            agent_port: 8765,
         }
     }
 }
@@ -38,6 +42,14 @@ impl Settings {
                             s.curseforge_key = v.trim().to_string()
                         }
                         "skip_update" => s.skip_update = v.trim().to_string(),
+                        "agent_api_key" => s.agent_api_key = v.trim().to_string(),
+                        "agent_port" => {
+                            if let Ok(p) = v.trim().parse::<u16>() {
+                                if p > 0 {
+                                    s.agent_port = p;
+                                }
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -48,10 +60,12 @@ impl Settings {
 
     pub fn save(&self) {
         let text = format!(
-            "download_dir={}\ncurseforge_key={}\nskip_update={}\n",
+            "download_dir={}\ncurseforge_key={}\nskip_update={}\nagent_api_key={}\nagent_port={}\n",
             self.download_dir.display(),
             self.curseforge_key,
-            self.skip_update
+            self.skip_update,
+            self.agent_api_key,
+            self.agent_port
         );
         let _ = std::fs::write(path(), text);
     }

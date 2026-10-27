@@ -801,3 +801,22 @@ pub fn prompt_search(
 }
 
 
+
+pub fn get_mod(source: &str, id_or_slug: &str) -> Option<ModHit> {
+    catch_unwind(AssertUnwindSafe(|| {
+        let conn = open_ui_reader().ok()?;
+        let sql = "SELECT m.source, m.source_id, m.slug, m.name, m.author, m.summary, m.icon_url, m.website_url, m.downloads, m.project_type
+             FROM mods m
+             WHERE m.source = ? AND (m.source_id = ? OR m.slug = ?)
+             LIMIT 1";
+        let bind = vec![
+            source.to_string(),
+            id_or_slug.to_string(),
+            id_or_slug.to_string(),
+        ];
+        let mut hits = query_hits(&conn, sql, &bind);
+        hits.pop()
+    }))
+    .ok()
+    .flatten()
+}
